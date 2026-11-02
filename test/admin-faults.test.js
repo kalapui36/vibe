@@ -51,7 +51,7 @@ test('관리자 실패·복구 상황 시뮬레이션',async t=>{
     await newForm(page,'첫 번째');
     await page.locator('#thumbnail-file').setInputFiles({name:'sample.png',mimeType:'image/png',buffer:Buffer.from([137,80,78,71,13,10,26,10])});
     assert.equal(await page.locator('#save-app').isDisabled(),true);
-    await page.locator('#cancel-editor').click();await newForm(page,'다음 프로그램');
+    page.once('dialog',dialog=>dialog.accept());await page.locator('#cancel-editor').click();await newForm(page,'다음 프로그램');
     await page.evaluate(()=>{const r=window.readers[0];r.result='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=';r.onload?.();});
     assert.equal(await page.locator('#image-preview img').count(),0);
     await page.locator('#save-app').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);assert.equal(f.state.uploads.length,0);assert.equal(f.state.rows[0].name,'다음 프로그램');
@@ -70,7 +70,7 @@ test('관리자 실패·복구 상황 시뮬레이션',async t=>{
    try{
     await newForm(page);
     await page.locator('#thumbnail-file').setInputFiles({name:'broken.png',mimeType:'image/png',buffer:Buffer.from([137,80,78,71,13,10,26,10])});
-    await page.waitForFunction(()=>document.querySelector('#editor-error').textContent.length>0);assert.equal(await page.locator('#save-app').isDisabled(),true);
+    await page.locator('#image-error:not([hidden])').waitFor();assert.equal(await page.locator('#save-app').isDisabled(),true);
     await page.locator('#reset-thumbnail').click();assert.equal(await page.locator('#save-app').isDisabled(),false);
     const image=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=10;c.height=10;const ctx=c.getContext('2d');ctx.fillStyle='#3564de';ctx.fillRect(0,0,10,10);return c.toDataURL('image/png');});
     await page.locator('#thumbnail-file').setInputFiles({name:'valid.png',mimeType:'image/png',buffer:Buffer.from(image.split(',')[1],'base64')});

@@ -1,4 +1,5 @@
 import { relatedLinks, primaryLabel } from './catalog.js';
+import { fieldError, validationMessage, validateEditor, clearFieldErrors } from './editor-fields.js';
 import { api, escape, categories, thumbnail, bindImageErrors, isPages, captureMessages } from './shared.js';
 if (isPages && location.protocol === 'http:' && !['localhost','127.0.0.1','[::1]'].includes(location.hostname)) {
   const secureUrl = new URL(location.href);
@@ -8,7 +9,30 @@ if (isPages && location.protocol === 'http:' && !['localhost','127.0.0.1','[::1]
 const homeUrl = isPages ? new URL('../', import.meta.url).href : '/';
 const main = document.querySelector('#admin-main'), editor = document.querySelector('#editor'), form = document.querySelector('#app-form');
 let apps=[], editing=null, imageChange=undefined, selectedFile=null, dragging=null, busy=false, toastTimer, polling, draftId=null, imageLoading=false, imageInvalid=false, imageReadVersion=0, activeReader;
-function syncSaveButton(){document.querySelector('#save-app').disabled=busy||imageLoading||imageInvalid;document.querySelector('#image-read-status').textContent=imageLoading?'이미지를 불러오는 중입니다.':'';document.querySelector('#image-preview').setAttribute('aria-busy',String(imageLoading));}
+let baseline='';
+function editorSnapshot(){
+  return JSON.stringify({fields:[...form.querySelectorAll('input:not([type=file]),textarea')].map(input=>[input.name||input.className,input.type==='checkbox'?input.checked:input.type==='radio'?input.checked:input.value]),image:imageChange===undefined?'unchanged':imageChange===null?'auto':`${selectedFile?.name}:${selectedFile?.size}:${selectedFile?.lastModified}`,file:document.querySelector('#thumbnail-file').value});
+}
+function hasUnsavedChanges(){return editor.open&&baseline!==editorSnapshot();}
+function requestClose(){if(!busy&&(!hasUnsavedChanges()||confirm('저장하지 않은 내용이 있습니다. 닫을까요?')))editor.close();}
+function protectNavigation(event){if(hasUnsavedChanges()){event.preventDefault();event.returnValue='';}}
+function syncNavigationProtection(){
+  window.removeEventListener('beforeunload',protectNavigation);
+  if(hasUnsavedChanges())window.addEventListener('beforeunload',protectNavigation);
+}
+for(const event of ['input','change','click'])form.addEventListener(event,syncNavigationProtection);
+editor.addEventListener('close',syncNavigationProtection);
+function syncSaveButton(){
+  const save=document.querySelector('#save-app');save.disabled=busy||imageLoading||imageInvalid;
+  save.textContent=busy?'저장 중…':imageLoading?'이미지 확인 중…':'저장';save.setAttribute('aria-busy',String(busy||imageLoading));
+  document.querySelector('#image-read-status').textContent=imageLoading?'이미지를 불러오는 중입니다.':'';
+  document.querySelector('#image-preview').setAttribute('aria-busy',String(imageLoading));
+}
+function imageError(message=''){
+  const el=document.querySelector('#image-error');el.textContent=message;el.hidden=!message;
+  const input=document.querySelector('#thumbnail-file');input.setAttribute('aria-describedby','image-error image-read-status');
+  if(message)input.setAttribute('aria-invalid','true');else input.removeAttribute('aria-invalid');
+}
 function setBusy(value){
   busy=value;
   for(const control of document.querySelectorAll('#app-form input,#app-form textarea,#app-form button,#admin-main button')){
@@ -104,7 +128,8 @@ function openEditor(app=null) {
   document.querySelector('#editor-title').textContent=app?'웹앱 수정':'웹앱 추가';
   form.elements.primary_label.value=app?.primary_label||'';document.querySelector('#related-links').replaceChildren();for(const link of app?.links||[])addLinkRow(link);updateLinkControls();
   form.elements.name.value=app?.name||'';form.elements.url.value=app?.url||'';form.elements.description.value=app?.description||'';form.elements.category.value=app?.category||'class';form.elements.visible.checked=app?.visible??true;
-  document.querySelector('#editor-error').textContent='';document.querySelector('#reload-editor').hidden=true;syncSaveButton();preview();if(!editor.open)editor.showModal();
+  clearFieldErrors(form);imageError();document.querySelector('#thumbnail-file').value='';
+  document.querySelector('#editor-error').textContent='';document.querySelector('#reload-editor').hidden=true;syncSaveButton();preview();baseline=editorSnapshot();if(!editor.open)editor.showModal();
 }
 function preview() {
   const raw=imageChange===null?editing?.capture:imageChange||editing?.image;
@@ -119,18 +144,19 @@ function updateLinkControls() {
 function addLinkRow(link={}) {
   if(document.querySelectorAll('.related-row').length>=6)return;
   const row=document.createElement('div');row.className='related-row';
-  row.innerHTML=`<input class="link-label" maxlength="40" required aria-label="관련 주소 이름" placeholder="교사용 설정" value="${escape(link.label||'')}"><input class="link-url" type="url" required aria-label="관련 웹 주소" placeholder="https://" value="${escape(link.url||'')}"><div class="link-actions"><button type="button" class="icon-button link-up" aria-label="관련 주소 위로 이동">↑</button><button type="button" class="icon-button link-down" aria-label="관련 주소 아래로 이동">↓</button><button type="button" class="icon-button remove-link" aria-label="관련 주소 삭제">×</button></div>`;
+  row.innerHTML=`<div class="link-field"><input class="link-label" maxlength="40" required aria-label="관련 주소 이름" placeholder="교사용 설정" value="${escape(link.label||'')}"></div><div class="link-field"><input class="link-url" type="url" required aria-label="관련 웹 주소" placeholder="https://" value="${escape(link.url||'')}"></div><div class="link-actions"><button type="button" class="icon-button link-up" aria-label="관련 주소 위로 이동">↑</button><button type="button" class="icon-button link-down" aria-label="관련 주소 아래로 이동">↓</button><button type="button" class="icon-button remove-link" aria-label="관련 주소 삭제">×</button></div>`;
   row.querySelector('.remove-link').onclick=()=>{row.remove();updateLinkControls();};
   row.querySelector('.link-up').onclick=()=>{row.previousElementSibling?.before(row);updateLinkControls();};
   row.querySelector('.link-down').onclick=()=>{row.nextElementSibling?.after(row);updateLinkControls();};
   document.querySelector('#related-links').appendChild(row);updateLinkControls();
 }
 document.querySelector('#add-link').onclick=()=>{addLinkRow();document.querySelector('.related-row:last-child .link-label')?.focus();};
+document.querySelector('#choose-thumbnail').onclick=()=>document.querySelector('#thumbnail-file').click();
 document.querySelector('#thumbnail-file').addEventListener('change',event=>{
-  cancelImageRead();const file=event.target.files[0];if(!file)return;
-  if(file.size>4*1024*1024||!['image/png','image/jpeg','image/webp'].includes(file.type)){imageInvalid=true;document.querySelector('#editor-error').textContent='JPG, PNG, WebP 파일을 4MB 이하로 올려 주세요.';event.target.value='';syncSaveButton();return;}
+  cancelImageRead();imageError();const file=event.target.files[0];if(!file)return;
+  if(file.size>4*1024*1024||!['image/png','image/jpeg','image/webp'].includes(file.type)){imageInvalid=true;imageError('JPG, PNG, WebP 파일을 4MB 이하로 올려 주세요.');event.target.value='';syncSaveButton();return;}
   const version=imageReadVersion,reader=new FileReader();activeReader=reader;imageLoading=true;syncSaveButton();
-  const failed=()=>{if(version!==imageReadVersion||!editor.open)return;imageLoading=false;imageInvalid=true;activeReader=null;document.querySelector('#editor-error').textContent='이미지를 읽지 못했습니다. 파일을 다시 선택하거나 자동 썸네일을 사용해 주세요.';syncSaveButton();};
+  const failed=()=>{if(version!==imageReadVersion||!editor.open)return;imageLoading=false;imageInvalid=true;activeReader=null;imageError('이미지를 읽지 못했습니다. 파일을 다시 선택하거나 자동 썸네일을 사용해 주세요.');syncSaveButton();};
   reader.onerror=failed;
   reader.onload=async()=>{
     if(version!==imageReadVersion||!editor.open)return;
@@ -141,7 +167,7 @@ document.querySelector('#thumbnail-file').addEventListener('change',event=>{
   };
   reader.readAsDataURL(file);
 });
-document.querySelector('#reset-thumbnail').onclick=()=>{cancelImageRead();imageChange=null;selectedFile=null;document.querySelector('#thumbnail-file').value='';document.querySelector('#editor-error').textContent='';preview();};
+document.querySelector('#reset-thumbnail').onclick=()=>{cancelImageRead();imageError();imageChange=null;selectedFile=null;document.querySelector('#thumbnail-file').value='';document.querySelector('#editor-error').textContent='';preview();};
 editor.addEventListener('close',cancelImageRead);
 document.querySelector('#reload-editor').onclick=async()=>{
   if(busy)return;
@@ -156,10 +182,18 @@ document.querySelector('#reload-editor').onclick=async()=>{
   }catch(error){document.querySelector('#editor-error').textContent=errorMessage(error);}
   finally{setBusy(false);}
 };
-for(const id of ['close-editor','cancel-editor']) document.querySelector(`#${id}`).onclick=()=>{if(!busy)editor.close();};
-editor.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
+for(const id of ['close-editor','cancel-editor']) document.querySelector(`#${id}`).onclick=requestClose;
+editor.addEventListener('cancel',event=>{event.preventDefault();requestClose();});
+form.addEventListener('focusout',event=>{if(event.target.matches('input:not([type=radio]):not([type=checkbox]):not([type=file]),textarea'))fieldError(event.target,validationMessage(event.target));});
+form.addEventListener('input',event=>{if(event.target.hasAttribute('aria-invalid'))fieldError(event.target,validationMessage(event.target));});
+function resizeEditor(){
+  const viewport=window.visualViewport;
+  editor.style.setProperty('--editor-viewport-height',`${viewport?.height||innerHeight}px`);
+  editor.style.setProperty('--editor-viewport-top',`${viewport?.offsetTop||0}px`);
+}
+window.visualViewport?.addEventListener('resize',resizeEditor);window.visualViewport?.addEventListener('scroll',resizeEditor);window.addEventListener('resize',resizeEditor);resizeEditor();
 form.addEventListener('submit',async event=>{
-  event.preventDefault();if(busy||imageLoading||imageInvalid)return;setBusy(true);document.querySelector('#editor-error').textContent='';
+  event.preventDefault();if(busy||imageLoading||imageInvalid||!validateEditor(form))return;setBusy(true);document.querySelector('#editor-error').textContent='';
   try {
     const payload={name:form.elements.name.value,url:form.elements.url.value,description:form.elements.description.value,category:form.elements.category.value,visible:form.elements.visible.checked,primary_label:primaryLabel(form.elements.primary_label.value),links:relatedLinks([...document.querySelectorAll('.related-row')].map(row=>({label:row.querySelector('.link-label').value,url:row.querySelector('.link-url').value})))};
     let id=editing?.id;

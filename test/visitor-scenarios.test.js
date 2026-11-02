@@ -52,7 +52,7 @@ test('방문자 이용 상황 시뮬레이션',async t=>{
    try{
     await page.clock.install();
     await page.route(base+'content/apps.json',route=>slow?undefined:route.fulfill({json:sample}));
-    await page.goto(base,{waitUntil:'domcontentloaded'});await page.locator('.loader').waitFor();
+    await page.goto(base,{waitUntil:'domcontentloaded'});await page.locator('.skeleton-grid').waitFor();
     await page.clock.runFor(16000);await page.locator('#retry').waitFor();slow=false;await page.locator('#retry').click();await page.locator('.app-card').first().waitFor();assert.equal(await page.locator('.app-card').count(),3);
    }finally{await page.close();}
   });
