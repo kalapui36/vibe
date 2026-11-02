@@ -50,9 +50,41 @@ test('검색·탐색·편집 UX 시뮬레이션',async t=>{
    const {page,close}=await visitor([...rows,{...rows[0],id:'hidden',name:'나무 비공개',visible:false},{...rows[0],id:'xss',name:'나무 <img src=x onerror="window.injected=1">'}]);
    try{
     await page.locator('#search').fill('나');assert.equal(await page.getByRole('option').count(),2);assert.equal(await page.locator('#search-suggestions img').count(),0);assert.equal(await page.evaluate(()=>window.injected),undefined);
-    await page.locator('#search').dispatchEvent('compositionstart');await page.locator('#search').fill('나무길');await page.locator('#search').press('Enter');assert.equal(await page.getByRole('option').count(),0);
+    await page.locator('#search').dispatchEvent('compositionstart');await page.locator('#search').fill('나무길');await page.locator('#search').press('Enter');assert.equal(await page.getByRole('option').count(),1);
+    assert.equal(new URL(page.url()).searchParams.has('app'),false,'IME Enter must not select a recommendation');
     await page.locator('#search').dispatchEvent('compositionend');assert.equal(await page.getByRole('option').count(),1);
    }finally{await close();}
+  });
+  await t.test('한글 조합 중에도 공백·조합 종료 없이 추천을 표시하고 갱신',async()=>{
+   const {page,close}=await visitor();try{
+    await page.locator('#search').focus();
+    const session=await page.context().newCDPSession(page);
+    // Chromium IME input produces real composition/input events with isComposing.
+    await session.send('Input.imeSetComposition',{text:'나',selectionStart:1,selectionEnd:1});
+    assert.equal(await page.locator('#search').inputValue(),'나');
+    assert.equal(await page.getByRole('option').count(),1,'추천은 조합 중인 나 한 글자로 표시되어야 함');
+    assert.equal(await page.locator('.suggestion-name mark').textContent(),'나');
+    await session.send('Input.imeSetComposition',{text:'나무길',selectionStart:3,selectionEnd:3});
+    assert.equal(await page.getByRole('option').count(),1);assert.equal(await page.locator('.suggestion-name mark').textContent(),'나무 길');
+    await page.locator('#search').dispatchEvent('keydown',{key:'Enter',code:'Enter',isComposing:true});
+    assert.equal(new URL(page.url()).searchParams.has('app'),false);
+    await session.send('Input.insertText',{text:'나무길'});
+    await page.locator('#search').press('ArrowDown');await page.locator('#search').press('Enter');
+    assert.equal(new URL(page.url()).searchParams.get('app'),'tree');
+    await page.locator('#search').fill('');
+    await session.send('Input.imeSetComposition',{text:'나',selectionStart:1,selectionEnd:1});
+    await page.getByRole('option').click();
+    assert.equal(new URL(page.url()).searchParams.get('app'),'tree');assert.equal(await page.locator('#search').inputValue(),rows[0].name);
+   }finally{await close();}
+  });
+  await t.test('목록 로딩 중 입력한 검색어는 로딩 완료 즉시 추천',async()=>{
+   const context=await browser.newContext(),page=await context.newPage();let pending;
+   try{
+    await page.route(base+'content/apps.json',route=>{pending=route;});
+    await page.goto(base,{waitUntil:'domcontentloaded'});await page.locator('.skeleton-grid').waitFor();
+    await page.locator('#search').fill('나');await pending.fulfill({json:rows});
+    await page.getByRole('option').waitFor();assert.equal(await page.locator('.suggestion-name mark').textContent(),'나');
+   }finally{await context.close();}
   });
   await t.test('검색·분류·추천 선택은 새로고침과 뒤로/앞으로 가기에서 복원',async()=>{
    const {page,close}=await visitor();try{

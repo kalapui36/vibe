@@ -35,9 +35,13 @@ function remember(replace=false) {
   }
   if(url.href!==location.href) history[replace?'replaceState':'pushState']({...history.state,vibeScroll:scrollY},'',url);
 }
-function restoreScroll(y) {
+function restoreScroll(y,unchangedY) {
   restoring=true;
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{scrollTo(0,y||0);restoring=false;}));
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    // A visitor may already have scrolled while the catalog or font loaded.
+    if(unchangedY===undefined||scrollY===unchangedY)scrollTo(0,y||0);
+    restoring=false;saveScroll();
+  }));
 }
 function closeSuggestions() {
   list.hidden=true;search.setAttribute('aria-expanded','false');search.removeAttribute('aria-activedescendant');activeOption=-1;
@@ -45,7 +49,7 @@ function closeSuggestions() {
 }
 function showSuggestions() {
   options=suggestions(apps,search.value);activeOption=-1;
-  if(!options.length||composing){closeSuggestions();return;}
+  if(!options.length){closeSuggestions();return;}
   list.innerHTML=options.map((app,index)=>`<li id="suggestion-${index}" role="option" aria-selected="false" data-index="${index}"><span class="suggestion-name">${highlightedName(app.name,search.value)}</span><span class="suggestion-category ${escape(app.category)}">${categories[app.category]}</span><span class="suggestion-arrow" aria-hidden="true">↖</span></li>`).join('');
   list.hidden=false;search.setAttribute('aria-expanded','true');search.removeAttribute('aria-activedescendant');
   document.querySelector('#suggestion-status').textContent=`추천 프로그램 ${options.length}개. 위아래 방향키로 선택할 수 있습니다.`;
@@ -104,13 +108,15 @@ for (const tab of tabs) {
 function searchChanged() {
   selectedId='';remember(typing);typing=true;render();showSuggestions();
 }
-search.addEventListener('input',()=>{if(!composing)searchChanged();});
-search.addEventListener('compositionstart',()=>{composing=true;closeSuggestions();});
+// Korean IMEs emit input events before compositionend. Show those values live;
+// only recommendation keyboard selection waits for composition to finish.
+search.addEventListener('input',searchChanged);
+search.addEventListener('compositionstart',()=>{composing=true;});
 search.addEventListener('compositionend',()=>{composing=false;searchChanged();});
 search.addEventListener('focus',()=>{if(loadState==='ready')showSuggestions();});
 search.addEventListener('blur',()=>{typing=false;closeSuggestions();});
 search.addEventListener('keydown',event=>{
-  if(composing||event.isComposing)return;
+  if(composing||event.isComposing||event.keyCode===229)return;
   if(event.key==='Escape'){event.preventDefault();closeSuggestions();return;}
   if(['ArrowDown','ArrowUp'].includes(event.key)){
     if(list.hidden)showSuggestions();if(list.hidden)return;
@@ -132,10 +138,13 @@ new ResizeObserver(updateIndicator).observe(document.querySelector('.tabs'));
 document.fonts.ready.then(updateIndicator);
 readLocation();
 async function load() {
-  const y=history.state?.vibeScroll||0;
+  const y=history.state?.vibeScroll||0,startingY=scrollY;
   loadState='loading';render();
   try { apps=await api('/api/apps');loadState='ready'; }
   catch { loadState='error'; }
-  render();if(loadState==='ready'){await document.fonts.ready;restoreScroll(y);}
+  render();if(loadState==='ready'){
+    if(document.activeElement===search)showSuggestions();
+    await document.fonts.ready;restoreScroll(y,startingY);
+  }
 }
 load();
