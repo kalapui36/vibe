@@ -1,1 +1,43 @@
-[]
+[
+  {
+    "id": "416a3338-277f-4262-af9c-e4d29e37c376",
+    "name": "샛별교사 업무포털 활용 안내",
+    "url": "https://kalapui.com/nambu/",
+    "category": "work",
+    "description": "업무포털의 주요 기능과 사용 방법을 모아 둔 안내.",
+    "visible": true,
+    "position": 0,
+    "thumbnail": null,
+    "capture": "content/thumbnails/nambu-source-preview.jpg",
+    "capture_status": "pending",
+    "created_at": "2026-11-02T13:30:33.274337+00:00",
+    "capture_source": "repository-preview"
+  },
+  {
+    "id": "2ec377f1-90ff-42ef-8ef2-071c18c07cc0",
+    "name": "나무 길 보드게임",
+    "url": "https://kalapui.com/namu/",
+    "category": "mind",
+    "description": "모둠별로 함께 참여하는 나무 길 보드게임.",
+    "visible": true,
+    "position": 1,
+    "thumbnail": null,
+    "capture": null,
+    "capture_status": "pending",
+    "created_at": "2026-11-02T13:30:33.274882+00:00"
+  },
+  {
+    "id": "93b97a96-28f2-4238-a913-913274e90f74",
+    "name": "지구촌 문제 자료 탐색",
+    "url": "https://kalapui.com/11.2-6/",
+    "category": "class",
+    "description": "지구촌 문제와 관련된 자료를 살펴보고 정리하는 수업 도구.",
+    "visible": true,
+    "position": 2,
+    "thumbnail": null,
+    "capture": "content/thumbnails/11.2-6-source-preview.jpg",
+    "capture_status": "pending",
+    "created_at": "2026-11-02T13:30:33.274906+00:00",
+    "capture_source": "repository-preview"
+  }
+]

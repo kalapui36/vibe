@@ -13,6 +13,7 @@ for (const row of rows) {
     await capturePage(row.url, fileURLToPath(new URL(`../${file}`, import.meta.url)));
     row.capture = file;
     row.capture_status = 'ready';
+    row.capture_source = 'live';
   } catch {
     row.capture_status = 'failed';
     console.log(`Capture failed for ${row.id}; manual thumbnail upload is available.`);
