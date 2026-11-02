@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:pages": "node scripts/build-pages.js",
+    "test:pages": "node --test test/pages.test.js test/github-pages-admin.test.js",
     "start": "node --env-file-if-exists=.env server.js",
     "dev": "node --watch --env-file-if-exists=.env server.js",
     "admin:password": "node scripts/set-password.js",

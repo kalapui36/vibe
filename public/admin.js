@@ -1,14 +1,20 @@
-import { api, escape, categories, thumbnail, bindImageErrors } from './shared.js';
+import { api, escape, categories, thumbnail, bindImageErrors, isPages } from './shared.js';
+if (isPages && location.protocol === 'http:' && !['localhost','127.0.0.1','[::1]'].includes(location.hostname)) {
+  const secureUrl = new URL(location.href);
+  secureUrl.protocol = 'https:';
+  location.replace(secureUrl.href);
+}
 const main = document.querySelector('#admin-main'), editor = document.querySelector('#editor'), form = document.querySelector('#app-form');
 let apps=[], editing=null, imageChange=undefined, selectedFile=null, dragging=null, busy=false, toastTimer, polling;
 function toast(message) { const el=document.querySelector('#toast'); el.textContent=message; el.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,4500); }
-function errorMessage(error) { if(error.status===401) { clearInterval(polling); showLogin(true); } return error.message; }
+function errorMessage(error) { if(error.status===401) { editor.close(); clearInterval(polling); showLogin(true); } return error.message; }
 function showLogin(configured) {
+  const credentialField = isPages ? '<label class="field">GitHub 토큰<input name="token" type="password" autocomplete="off" spellcheck="false" required placeholder="github_pat_…"></label><p class="field-hint">이 저장소의 Contents 읽기·쓰기 권한이 있는 토큰을 입력하세요. 토큰은 저장하지 않으며, 이 탭을 새로고침하면 다시 입력해야 합니다.</p><a class="token-help" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub에서 토큰 만들기 ↗</a>' : '<label class="field">비밀번호<input name="password" type="password" autocomplete="current-password" required placeholder="관리자 비밀번호"></label>';
   main.className='login-main';
-  main.innerHTML=`<section class="login-panel"><span class="eyebrow muted">MASTER ADMIN</span><h1>관리자 로그인</h1><p>웹앱과 공개 목록을 관리합니다.</p>${configured ? '<form id="login-form"><label class="field">비밀번호<input name="password" type="password" autocomplete="current-password" required placeholder="관리자 비밀번호"></label><p id="login-error" class="form-error" role="alert"></p><button class="button primary" type="submit">로그인 <span>→</span></button></form>' : '<div class="setup-notice"><b>관리자 비밀번호 설정이 필요합니다.</b><p>서버 터미널에서 아래 명령을 실행해 주세요.</p><code>npm run admin:password</code><p>설정이 끝나면 페이지를 새로고침하세요.</p></div>'}<a class="back-link" href="/">← 공개 페이지로 돌아가기</a></section>`;
+  main.innerHTML=`<section class="login-panel"><span class="eyebrow muted">MASTER ADMIN</span><h1>관리자 로그인</h1><p>웹앱과 공개 목록을 관리합니다.</p>${configured ? '<form id="login-form">'+credentialField+'<p id="login-error" class="form-error" role="alert"></p><button class="button primary" type="submit">로그인 <span>→</span></button></form>' : '<div class="setup-notice"><b>관리자 비밀번호 설정이 필요합니다.</b><p>서버 터미널에서 아래 명령을 실행해 주세요.</p><code>npm run admin:password</code><p>설정이 끝나면 페이지를 새로고침하세요.</p></div>'}<a class="back-link" href="${isPages?'../':'/'}">← 공개 페이지로 돌아가기</a></section>`;
   document.querySelector('#login-form')?.addEventListener('submit',async event=>{
     event.preventDefault(); const button=event.target.querySelector('button'); button.disabled=true;
-    try { await api('/api/login',{ method:'POST',body:{password:event.target.password.value} }); await startDashboard(); }
+    try { await api('/api/login',{ method:'POST',body:isPages?{token:event.target.elements.token.value}:{password:event.target.elements.password.value} }); await startDashboard(); }
     catch(error) { document.querySelector('#login-error').textContent=error.message; }
     finally { button.disabled=false; }
   });
@@ -18,7 +24,7 @@ async function startDashboard() {
   main.className='admin-main';
   await refresh();
   clearInterval(polling);
-  polling=setInterval(async()=>{ if(!editor.open && !dragging && !busy && !document.querySelector('#delete-dialog').open && apps.some(app=>app.capture_status==='pending')) { try { await refresh(); } catch(error) { errorMessage(error); } } },4000);
+  polling=setInterval(async()=>{ if(!document.hidden && !editor.open && !dragging && !busy && !document.querySelector('#delete-dialog').open && apps.some(app=>app.capture_status==='pending')) { try { await refresh(); } catch(error) { errorMessage(error); } } },isPages?15000:4000);
 }
 function renderDashboard() {
   main.innerHTML=`<div class="dashboard-heading"><div><span class="eyebrow muted">DASHBOARD</span><h1>웹앱 관리</h1><p>웹앱을 등록하고 공개 목록을 관리하세요.</p></div><div class="dashboard-actions"><button class="text-button" id="logout">로그아웃</button><button class="button primary" id="add-app">＋ 웹앱 추가</button></div></div><div class="stats"><div><span>전체 웹앱</span><b>${apps.length}<small>개</small></b></div><div><span>공개 중</span><b>${apps.filter(a=>a.visible).length}<small>개</small></b></div><div><span>숨김</span><b>${apps.filter(a=>!a.visible).length}<small>개</small></b></div></div><div class="admin-list-heading"><h2>등록된 웹앱 <span class="total-count">${apps.length}</span></h2><span>드래그 또는 화살표로 순서를 변경하세요.</span></div><div id="admin-list">${apps.length ? apps.map((app,index)=>`<article class="admin-row" draggable="true" data-id="${app.id}"><div class="order-controls"><span class="drag-handle" aria-hidden="true">⠿</span><button data-action="up" aria-label="${escape(app.name)} 위로 이동" ${index===0?'disabled':''}>↑</button><button data-action="down" aria-label="${escape(app.name)} 아래로 이동" ${index===apps.length-1?'disabled':''}>↓</button></div><div class="admin-thumb">${thumbnail(app)}</div><div class="admin-row-info"><span class="category-label ${app.category}"><i></i>${categories[app.category]}</span><h3>${escape(app.name)} <span class="status-pill ${app.visible?'published':''}">${app.visible?'공개':'숨김'}</span></h3><a href="${escape(app.url)}" target="_blank" rel="noopener noreferrer">${escape(app.url)} ↗</a><span class="capture-status ${app.capture_status==='failed'?'failed':''}">${app.thumbnail ? '직접 지정한 썸네일' : app.capture_status==='ready' ? '자동 썸네일' : app.capture_status==='failed' ? '자동 캡처 실패 · 재시도하거나 이미지를 올려 주세요.' : '첫 화면 캡처 중…'}</span></div><div class="row-actions"><button class="button compact secondary" data-action="capture" ${app.capture_status==='pending'?'disabled':''}>다시 캡처</button><button class="button compact secondary" data-action="edit">수정</button><button class="icon-button delete-button" data-action="delete" aria-label="${escape(app.name)} 삭제"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg></button></div></article>`).join('') : '<div class="empty-state"><div class="empty-icon">＋</div><h3>첫 웹앱을 등록해 보세요.</h3><p>주소를 입력하면 첫 화면을 썸네일로 가져옵니다.</p><button class="button secondary" id="first-app">웹앱 추가</button></div>'}</div>`;
@@ -80,7 +86,7 @@ form.addEventListener('submit',async event=>{
     if(id) await api(`/api/admin/apps/${id}`,{method:'PUT',body:payload});
     else {const created=await api('/api/admin/apps',{method:'POST',body:payload});id=created.id;editing=created;}
     if(imageChange!==undefined) await api(`/api/admin/apps/${id}/thumbnail`,{method:'PUT',body:{image:imageChange}});
-    editor.close();await refresh();toast('저장했습니다.');
+    editor.close();await refresh();toast(isPages?'저장했습니다. 공개 페이지에 반영되기까지 잠시 걸릴 수 있습니다.':'저장했습니다.');
   }catch(error){document.querySelector('#editor-error').textContent=errorMessage(error);}
   finally{busy=false;document.querySelector('#save-app').disabled=false;}
 });
