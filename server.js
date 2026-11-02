@@ -1,4 +1,4 @@
-import { relatedLinks, primaryLabel } from './public/catalog.js';
+import { relatedLinks, primaryLabel, creationId, sameEntryMetadata } from './public/catalog.js';
 import express from 'express';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
@@ -75,7 +75,12 @@ async function validate(body) {
 }
 app.post('/api/admin/apps', admin, async (req, res) => {
   const value = await validate(req.body);
-  const id = randomUUID();
+  const id = creationId(req.body.request_id)||randomUUID();
+  const existing=db.prepare('SELECT * FROM apps WHERE id=?').get(id);
+  if(existing){
+    if(!sameEntryMetadata(serialize(existing),value))return res.status(409).json({error:'이미 저장된 등록 요청입니다. 최신 내용을 불러와 확인해 주세요.',code:'conflict'});
+    return res.json(serialize(existing));
+  }
   const position = db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS position FROM apps').get().position;
   db.prepare('INSERT INTO apps (id,name,url,description,category,visible,position,primary_label,links) VALUES (?,?,?,?,?,?,?,?,?)').run(id,value.name,value.url,value.description,value.category,value.visible,position,value.primary_label,JSON.stringify(value.links));
   scheduleCapture(id); res.status(201).json(serialize(db.prepare('SELECT * FROM apps WHERE id=?').get(id)));

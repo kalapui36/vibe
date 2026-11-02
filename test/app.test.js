@@ -41,7 +41,7 @@ test('관리자 인증, CRUD, 공개 분리, 정렬, 저장 유지 및 브라우
     let first,second;
     await t.test('웹앱 등록 및 내부 주소 차단',async()=>{
       assert.equal((await request('/api/admin/apps',{method:'POST',cookie,body:{name:'내부',url:'http://127.0.0.1',category:'class'}})).response.status,400);
-      first=(await request('/api/admin/apps',{method:'POST',cookie,body:{name:'수업 자료 정리',url:'https://github.com/kalapui36/vibe',description:'수업 자료를 모아 확인하는 웹앱',category:'class'}})).data;
+      first=(await request('/api/admin/apps',{method:'POST',cookie,body:{name:'수업 자료 정리',url:'https://github.com/expressjs/express',description:'수업 자료를 모아 확인하는 웹앱',category:'class'}})).data;
       assert.ok(first.id);
       second=(await request('/api/admin/apps',{method:'POST',cookie,body:{name:'업무 일정',url:'https://github.com',description:'일정을 확인합니다.',category:'work',visible:false}})).data;
       assert.ok(second.id);
@@ -90,7 +90,7 @@ test('관리자 인증, CRUD, 공개 분리, 정렬, 저장 유지 및 브라우
     await t.test('실제 원격 첫 화면 자동 캡처',async()=>{
       let item;
       for(let i=0;i<160;i++) {item=(await request('/api/admin/apps',{cookie})).data.find(a=>a.id===first.id);if(item.capture_status!=='pending')break;await sleep(250);}
-      assert.equal(item.capture_status,'ready','외부 첫 화면 캡처가 성공해야 합니다.');
+      assert.equal(item.capture_status,'ready',`외부 첫 화면 캡처가 성공해야 합니다. 실패 단계: ${item.capture_error || 'unknown'}`);
       const response=await fetch(base+item.capture);
       assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/image\/jpeg/);
       assert.ok((await response.arrayBuffer()).byteLength>5000);

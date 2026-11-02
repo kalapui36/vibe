@@ -1,6 +1,6 @@
 import { api, escape, categories, thumbnail, bindImageErrors } from './shared.js';
 import { relatedLinks } from './catalog.js';
-let apps = [], category = 'all', transition;
+let apps = [], category = 'all', transition, loadState='loading';
 const search = document.querySelector('#search'), results = document.querySelector('#results');
 const tabs = [...document.querySelectorAll('.tab')];
 const indicator = document.querySelector('.tab-indicator');
@@ -18,6 +18,11 @@ function card(app) {
 }
 function render(animate = false) {
   transition?.cancel();
+  if(loadState!=='ready'){
+    document.querySelector('#result-status').textContent=loadState==='loading'?'웹앱을 불러오는 중입니다.':'목록 연결을 확인해 주세요.';
+    results.innerHTML=loadState==='loading'?'<div class="empty-state"><span class="loader"></span><h2>웹앱을 불러오는 중입니다.</h2></div>':'<div class="empty-state"><h2>목록을 불러오지 못했습니다.</h2><p>연결을 확인한 뒤 다시 시도해 주세요.</p><button class="button" id="retry">다시 시도</button></div>';
+    document.querySelector('#retry')?.addEventListener('click',load);updateIndicator();return;
+  }
   const query = search.value.trim().toLocaleLowerCase();
   const filtered = apps.filter(app => (category === 'all' || app.category === category) && `${app.name} ${app.description}`.toLocaleLowerCase().includes(query));
   for (const key of ['all',...Object.keys(categories)]) document.querySelector(`#count-${key}`).textContent = key === 'all' ? apps.length : apps.filter(app=>app.category === key).length;
@@ -47,11 +52,13 @@ for (const tab of tabs) {
   });
 }
 search.addEventListener('input',()=>render());
-document.addEventListener('keydown',event=>{ if(event.key === '/' && !['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){ event.preventDefault(); search.focus(); } });
+document.addEventListener('keydown',event=>{ if(event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!document.activeElement.isContentEditable&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){ event.preventDefault(); search.focus(); } });
 new ResizeObserver(updateIndicator).observe(document.querySelector('.tabs'));
 document.fonts.ready.then(updateIndicator);
 async function load() {
-  try { apps = await api('/api/apps'); render(); }
-  catch { results.innerHTML='<div class="empty-state"><h2>목록을 불러오지 못했습니다.</h2><p>연결을 확인한 뒤 다시 시도해 주세요.</p><button class="button" id="retry">다시 시도</button></div>'; document.querySelector('#retry').onclick=load; }
+  loadState='loading';render();
+  try { apps=await api('/api/apps');loadState='ready'; }
+  catch { loadState='error'; }
+  render();
 }
 load();

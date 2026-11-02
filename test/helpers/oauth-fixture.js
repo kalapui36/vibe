@@ -19,6 +19,7 @@ export async function oauthFixture({secure=false,configured=true}={}){
       return reply({access_token:`gho-test-${code}-${++state.exchanges}`,token_type:'bearer',scope:'repo'});
     }
     if(address.host!=='api.github.com')throw new Error('Unexpected external destination');
+    if(state.rateLimited)return new Response(JSON.stringify({message:'limit'}),{status:403,headers:{'Content-Type':'application/json','X-RateLimit-Remaining':'0','Retry-After':'60'}});
     if(state.apiDown)return new Response('<html>Unavailable</html>',{status:503});
     const authorization=options.headers?.Authorization||'';
     const token=authorization.replace('Bearer ','');

@@ -27,6 +27,10 @@ test('기존 SQLite 데이터는 보존하고 관련 주소 저장 구조로 이
     let rows=await(await fetch(base+'/api/apps')).json();assert.equal(rows[0].primary_label,'학생용');assert.deepEqual(rows[0].links,payload.links);
     assert.equal((await fetch(base+'/api/admin/apps/legacy',{method:'PUT',headers,body:JSON.stringify({...payload,links:[{label:'잘못된 링크',url:'javascript:alert(1)'}]})})).status,400);
     rows=await(await fetch(base+'/api/apps')).json();assert.deepEqual(rows[0].links,payload.links);
+    const draft={...payload,name:'중복 등록 방지',request_id:'22222222-2222-4222-8222-222222222222'};
+    assert.equal((await fetch(base+'/api/admin/apps',{method:'POST',headers,body:JSON.stringify(draft)})).status,201);
+    assert.equal((await fetch(base+'/api/admin/apps',{method:'POST',headers,body:JSON.stringify(draft)})).status,200);
+    rows=await(await fetch(base+'/api/apps')).json();assert.equal(rows.length,2);
   }finally{if(server.exitCode===null)await new Promise(resolve=>{server.once('exit',resolve);server.kill();});await rm(dir,{recursive:true,force:true});}
 });
 test('자동 캡처 실패 단계를 구분하며 내부 주소를 차단한다',async()=>{

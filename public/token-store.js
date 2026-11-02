@@ -1,5 +1,6 @@
+import { requestJson } from './request.js';
 // Transitional login only. The dispatcher disables this path once auth_url is configured.
-import { webAddress, relatedLinks, primaryLabel } from './catalog.js';
+import { webAddress, relatedLinks, primaryLabel, creationId, sameEntryMetadata } from './catalog.js';
 // Credentials stay in memory for this tab. No localStorage, public file, or URL tokens.
 let token = '';
 let config;
@@ -10,24 +11,25 @@ const categories = new Set(['class', 'mind', 'work']);
 
 async function settings() {
   if (!config) {
-    const response = await fetch(new URL('content/config.json', baseUrl), { cache: 'no-cache' });
+    const {response,data}=await requestJson(new URL('content/config.json',baseUrl),{cache:'no-cache'});
     if (!response.ok) throw new Error('저장소 설정을 불러오지 못했습니다.');
-    config = await response.json();
+    config = data;
     if (![config.owner, config.repo].every(part => /^[\w.-]+$/.test(part)) || typeof config.branch !== 'string') throw new Error('저장소 설정을 확인해 주세요.');
   }
   return config;
 }
 async function github(path, { method = 'GET', body } = {}) {
   const { owner, repo } = await settings();
-  const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}${path}`, {
+  const {response,data} = await requestJson(path==='/user'?'https://api.github.com/user':`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}${path}`, {
     method, cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28', ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
+    if(response.status===429||(response.status===403&&(response.headers.get('x-ratelimit-remaining')==='0'||response.headers.get('retry-after'))))throw Object.assign(new Error('GitHub 요청 한도에 도달했습니다. 잠시 기다린 뒤 다시 시도해 주세요.'),{status:429,code:'rate_limited'});
     if (response.status === 401) { token = ''; snapshot = null; }
     const message = response.status >= 500 ? 'GitHub에서 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' : response.status === 401 ? '토큰이 만료되었거나 올바르지 않습니다.' : response.status === 403 ? '저장소의 Contents 읽기·쓰기 권한을 확인해 주세요.' : response.status === 404 ? '저장소를 찾을 수 없습니다. 토큰의 저장소 접근 권한을 확인해 주세요.' : [409,422].includes(response.status) ? '다른 곳에서 목록이 변경되었습니다. 새로 로그인한 뒤 다시 시도해 주세요.' : 'GitHub 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.';
     const error = new Error(message); error.status = response.status; throw error;
   }
-  return response.status === 204 ? null : response.json();
+  return data;
 }
 function decode(value) { return new TextDecoder().decode(Uint8Array.from(atob(value.replace(/\s/g, '')), char => char.charCodeAt(0))); }
 function encode(value) {
@@ -69,6 +71,8 @@ export async function pagesApi(path, options = {}) {
     token = String(body?.token || '').trim();
     if (!token) throw new Error('GitHub 토큰을 입력해 주세요.');
     try {
+      const user=await github('/user');const {owner}=await settings();
+      if(typeof user.login!=='string'||user.login.toLowerCase()!==owner.toLowerCase())throw Object.assign(new Error('이 계정은 관리자 접근이 허용되지 않습니다.'),{status:403,code:'access_denied'});
       const repo = await github('');
       if (repo.permissions?.push !== true) throw new Error('이 저장소를 수정할 수 있는 GitHub 계정의 토큰이 필요합니다.');
       await load();
@@ -87,7 +91,9 @@ export async function pagesApi(path, options = {}) {
   }
   if (path === '/api/admin/apps' && method === 'POST') {
     const value=validated(body);
-    const row={...value,id:crypto.randomUUID(),position:Math.max(-1,...rows.map(row=>row.position))+1,thumbnail:null,capture:null,capture_status:'pending',created_at:new Date().toISOString()};
+    const requestId=creationId(body.request_id),existing=requestId&&rows.find(row=>row.id===requestId);
+    if(existing){if(!sameEntryMetadata(existing,value))throw Object.assign(new Error('이미 저장된 등록 요청입니다. 최신 내용을 불러와 확인해 주세요.'),{status:409});return decorate(existing);}
+    const row={...value,id:requestId||crypto.randomUUID(),position:Math.max(-1,...rows.map(row=>row.position))+1,thumbnail:null,capture:null,capture_status:'pending',capture_requested_at:new Date().toISOString(),created_at:new Date().toISOString()};
     rows.push(row);await save(rows,'Add web app');return decorate(row);
   }
   const match=/^\/api\/admin\/apps\/([\w-]+)(?:\/(thumbnail|capture))?$/.exec(path);
@@ -95,11 +101,11 @@ export async function pagesApi(path, options = {}) {
   if (!row) throw new Error('웹앱을 찾을 수 없습니다.');
   if (!match[2] && method==='PUT') {
     const value=validated({...row,...body});
-    if(row.url!==value.url){row.capture=null;row.capture_status='pending';row.capture_error=null;}
+    if(row.url!==value.url){row.capture=null;row.capture_status='pending';row.capture_error=null;row.capture_requested_at=new Date().toISOString();}
     Object.assign(row,value);await save(rows,'Update web app');return {ok:true};
   }
   if (!match[2] && method==='DELETE') {await save(rows.filter(item=>item.id!==row.id),'Delete web app');return {ok:true};}
-  if (match[2]==='capture') {row.capture_status='pending';row.capture_error=null;await save(rows,'Refresh web app screenshot');return {ok:true};}
+  if (match[2]==='capture') {row.capture_status='pending';row.capture_error=null;row.capture_requested_at=new Date().toISOString();await save(rows,'Refresh web app screenshot');return {ok:true};}
   if (match[2]==='thumbnail') {
     if(body.image===null)row.thumbnail=null;
     else {

@@ -81,3 +81,21 @@ test('GitHub 장애에는 데이터를 수정하지 않고, 미설정 서버는 
   try{assert.equal((await pending.request('/auth/login')).headers.get('location'),'/setup');const page=await pending.request('/setup');assert.equal(page.status,200);assert.equal((await page.text()).includes('test-session-secret'),false);assert.equal(pending.state.calls.length,0);}
   finally{await pending.close();}
 });
+
+test('GitHub 요청 한도는 권한 회수와 구분하고 로그인 상태를 보존한다',async()=>{
+ const f=await oauthFixture();try{
+  const {cookie}=await f.login();f.state.rateLimited=true;
+  const response=await f.request('/api/admin/apps',{cookie});assert.equal(response.status,429);assert.equal(response.headers.getSetCookie().length,0);assert.equal((await response.json()).code,'rate_limited');
+  f.state.rateLimited=false;assert.equal((await f.request('/api/admin/apps',{cookie})).status,200);
+ }finally{await f.close();}
+});
+
+test('등록 응답 유실 재시도는 같은 ID를 복구하고 다른 내용으로 덮어쓰지 않는다',async()=>{
+ const f=await oauthFixture();try{
+  const {cookie}=await f.login();const list=await f.request('/api/admin/apps',{cookie});const revision=list.headers.get('x-catalog-revision');
+  const body={...input,request_id:'11111111-1111-4111-8111-111111111111'};
+  const first=await f.request('/api/admin/apps',{cookie,method:'POST',body,revision});assert.equal(first.status,201);
+  const again=await f.request('/api/admin/apps',{cookie,method:'POST',body,revision});assert.equal(again.status,201);assert.equal((await again.json()).id,body.request_id);assert.equal(f.state.rows.length,1);
+  const changed=await f.request('/api/admin/apps',{cookie,method:'POST',body:{...body,name:'다른 이름'},revision});assert.equal(changed.status,409);assert.equal(f.state.rows[0].name,input.name);
+ }finally{await f.close();}
+});

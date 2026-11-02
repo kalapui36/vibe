@@ -13,3 +13,5 @@
 @media(max-width:360px){.tab{padding:9px 6px;font-size:11px}.brand{font-size:13px}.footer-categories{display:none}.related-links{gap:6px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .tabs{min-width:0;max-width:100%;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tab:focus-visible{outline-offset:-3px}.card-description{font-size:13px;color:#687180}.primary-label{font-size:11px}
+
+.related-links{min-width:0;flex:1}.related-link{max-width:100%;overflow-wrap:anywhere}.primary-label{max-width:42%;overflow-wrap:anywhere}

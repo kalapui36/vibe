@@ -1,10 +1,10 @@
+import { requestJson } from './request.js';
 // OAuth credentials are handled by the administrator server. The old token
 // login stays available only until that server is connected for the first time.
 const baseUrl=new URL('../',import.meta.url);
 export async function pagesApi(path,options={}){
-  const response=await fetch(new URL('content/config.json',baseUrl),{cache:'no-cache'});
+  const {response,data:config}=await requestJson(new URL('content/config.json',baseUrl),{cache:'no-cache'});
   if(!response.ok)throw new Error('관리자 연결 설정을 불러오지 못했습니다.');
-  const config=await response.json();
   if(!config.auth_url){
     const legacy=await import('./token-store.js');
     const result=await legacy.pagesApi(path,options);

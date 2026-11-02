@@ -10,3 +10,5 @@
 .link-actions{display:flex;gap:2px;align-items:center}.link-actions .icon-button{font-size:17px;padding:7px 3px}.related-row .remove-link{font-size:23px}.admin-thumb img.preview-art{object-fit:contain;background:#edf2eb;padding:7px}
 
 .oauth-panel>p{line-height:1.8}.oauth-button{width:100%;margin-top:12px;min-height:47px;text-align:center}.oauth-button svg{width:21px;height:21px;flex-shrink:0}.oauth-button span{margin-left:auto}.oauth-hint{margin-top:17px;line-height:1.9!important}.connection-notice{margin:0 0 25px}.connection-notice .button{margin-top:10px}.oauth-panel .form-error:empty{display:none}
+
+.dialog-actions{flex-wrap:wrap}.dashboard-actions{flex-wrap:wrap;row-gap:5px}.editor-preview[aria-busy=true]{opacity:.6}

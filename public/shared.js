@@ -1,3 +1,5 @@
+import { requestJson } from './request.js';
+import { publicCatalog } from './catalog.js';
 let catalogRevision=null;
 export const categories = { class: '수업', mind: '사회정서교육', work: '업무' };
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
@@ -5,25 +7,15 @@ export const isPages = document.querySelector('meta[name="vibe-runtime"]')?.cont
 export async function api(path, options = {}) {
   if (isPages) {
     if (path !== '/api/apps') return (await import('./github-store.js')).pagesApi(path, options);
-    const response = await fetch(new URL('../content/apps.json', import.meta.url), { cache: 'no-cache' });
-    if (!response.ok) throw new Error('웹앱 목록을 불러오지 못했습니다.');
-    const rows = await response.json();
-    if (!Array.isArray(rows)) throw new Error('웹앱 목록 형식을 확인해 주세요.');
-    return rows.filter(row => row.visible !== false).filter(row => {
-      try { return ['http:', 'https:'].includes(new URL(row.url).protocol) && categories[row.category]; }
-      catch { return false; }
-    }).sort((a,b) => (a.position || 0) - (b.position || 0)).map(row => {
-      const image=row.thumbnail||row.capture||row.image||null;
-      return { ...row, image:image?new URL(image,new URL('../',import.meta.url)).href:null, preview:row.preview?new URL(row.preview,new URL('../',import.meta.url)).href:null };
-    });
+    const {response,data}=await requestJson(new URL('../content/apps.json',import.meta.url),{cache:'no-cache'});
+    if(!response.ok)throw new Error('웹앱 목록을 불러오지 못했습니다.');
+    return publicCatalog(data,new URL('../',import.meta.url));
   }
-  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', 'X-Vibe-Request': '1', ...(catalogRevision&&path.startsWith('/api/admin/')?{'If-Match':catalogRevision}:{}), ...options.headers }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
+  const {response,data} = await requestJson(path, { ...options, headers: { 'Content-Type': 'application/json', 'X-Vibe-Request': '1', ...(catalogRevision&&path.startsWith('/api/admin/')?{'If-Match':catalogRevision}:{}), ...options.headers }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
   const revision=response.headers.get('X-Catalog-Revision');
   if(revision)catalogRevision=revision;
-  let data;
-  try { data = await response.json(); } catch { throw new Error('서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'); }
-  if (!response.ok) { const error = new Error(data.error || '요청에 실패했습니다.'); error.status = response.status; error.code=data.code; throw error; }
-  return data;
+  if (!response.ok) { const error = new Error(data.error || '요청에 실패했습니다.'); error.status = response.status; error.code=data.code; error.loggedOut=data.logged_out===true; throw error; }
+  return path==='/api/apps'?publicCatalog(data,new URL('../',import.meta.url)):data;
 }
 export const captureMessages = {
   dns: '주소를 확인하지 못했습니다. 도메인과 네트워크 연결을 확인해 주세요.',
