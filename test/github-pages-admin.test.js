@@ -2,40 +2,39 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { chromium } from 'playwright-core';
+import { oauthFixture } from './helpers/oauth-fixture.js';
 
-test('Pages 관리자가 GitHub Contents API로 등록·수정·정렬·썸네일·삭제를 저장한다', async () => {
-  const app=express();app.use('/vibe',express.static(process.cwd()));
-  const server=await new Promise(resolve=>{const instance=app.listen(0,'127.0.0.1',()=>resolve(instance));});
+const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=';
+test('Pages 로그인 버튼 → GitHub 인증 → 관리자 편집·세션 유지·다른 계정 거부',async()=>{
+  const f=await oauthFixture();
+  const pages=express();pages.use('/vibe',express.static(process.cwd()));
+  const server=await new Promise(resolve=>{const s=pages.listen(0,'127.0.0.1',()=>resolve(s));});
+  const base=`http://127.0.0.1:${server.address().port}/vibe/`;
   let browser;
-  try {
+  try{
     browser=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox','--disable-dev-shm-usage']});
-    const page=await browser.newPage();
-    let rows=[],sha='initial',writes=0,conflict=false;
-    const uploaded=[];
-    const errors=[];page.on('pageerror',error=>errors.push(error.message));
-    await page.route('https://api.github.com/**',async route=>{
-      const request=route.request(),url=new URL(request.url());
-      assert.equal(request.headers().authorization,'Bearer test-token-not-a-real-credential');
-      assert.equal(url.pathname.startsWith('/repos/kalapui36/vibe'),true);
-      if(url.pathname==='/repos/kalapui36/vibe')return route.fulfill({json:{permissions:{push:true}}});
-      if(url.pathname.endsWith('/content/apps.json')){
-        if(request.method()==='GET')return route.fulfill({json:{sha,content:Buffer.from(JSON.stringify(rows)).toString('base64')}});
-        const payload=request.postDataJSON();
-        if(conflict||payload.sha!==sha)return route.fulfill({status:409,json:{message:'Conflict'}});
-        rows=JSON.parse(Buffer.from(payload.content,'base64').toString('utf8'));sha=`revision-${++writes}`;
-        return route.fulfill({json:{content:{sha}}});
+    const page=await browser.newPage(),errors=[],apiRequests=[];
+    page.on('pageerror',error=>errors.push(error.message));
+    page.on('request',request=>{if(request.url().startsWith('https://api.github.com/'))apiRequests.push(request.url());});
+    await page.context().route('https://github.com/**',route=>route.abort());
+    await page.context().route(f.base+'/auth/login',async route=>{
+      const response=await route.fetch({maxRedirects:0});
+      const destination=response.headers().location;
+      if(destination?.startsWith('https://github.com/login/oauth/authorize')){
+        const state=new URL(destination).searchParams.get('state');
+        return route.fulfill({response,headers:{...response.headers(),location:`${f.base}/auth/callback?code=owner-browser&state=${state}`}});
       }
-      if(request.method()==='PUT'&&url.pathname.includes('/content/thumbnails/')){
-        uploaded.push(request.postDataJSON());return route.fulfill({json:{content:{sha:'image'}}});
-      }
-      throw new Error('Unexpected API request');
+      return route.fulfill({response});
     });
-    const base=`http://127.0.0.1:${server.address().port}/vibe/`;
-    await page.route(base+'content/apps.json',route=>route.fulfill({json:rows}));
-    await page.route(base+'content/thumbnails/*',route=>route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=','base64')}));
+    await page.route(base+'content/config.json',route=>route.fulfill({json:{...f.state.publicConfig,auth_url:f.base}}));
+    await page.context().route('https://kalapui.com/vibe/content/thumbnails/**',route=>route.fulfill({contentType:'image/png',body:Buffer.from(png.split(',')[1],'base64')}));
     await page.goto(base+'manage.html');
-    await page.locator('[name=token]').fill('test-token-not-a-real-credential');
-    await page.locator('#login-form button').click();await page.locator('#add-app').waitFor();
+    await page.locator('.oauth-button').waitFor();
+    assert.equal(await page.locator('[name=token]').count(),0);assert.equal(await page.locator('[name=password]').count(),0);
+    await page.locator('.oauth-button').click();
+    try{await page.locator('#add-app').waitFor({timeout:6000});}catch{throw new Error(JSON.stringify({url:page.url(),main:await page.locator('main').textContent(),errors,calls:f.state.calls}));}
+    assert.equal(page.url(),f.base+'/admin');
+    assert.equal(f.state.publicConfig.auth_url,f.base);
     await page.locator('#add-app').click();
     await page.locator('#app-form [name=name]').fill('학급 활동');
     await page.locator('#app-form [name=url]').fill('https://example.com/');
@@ -44,50 +43,44 @@ test('Pages 관리자가 GitHub Contents API로 등록·수정·정렬·썸네�
     await page.locator('#add-link').click();await page.locator('.link-label').fill('교사용 설정');await page.locator('.link-url').fill('https://example.com/teacher');
     await page.locator('#add-link').click();await page.locator('.link-label').nth(1).fill('활동지');await page.locator('.link-url').nth(1).fill('https://example.com/worksheet');
     await page.locator('.link-up').nth(1).click();
-    await page.locator('#save-app').click();await page.waitForFunction(()=>!document.querySelector('#editor').open || document.querySelector('#editor-error').textContent);
-    assert.equal(await page.locator('#editor').evaluate(dialog=>dialog.open),false,await page.locator('#editor-error').textContent());
-    assert.equal(rows.length,1);assert.equal(rows[0].name,'학급 활동');assert.equal(rows[0].capture_status,'pending');
-    const first=rows[0].id;
-    assert.equal(rows[0].primary_label,'학생용');assert.deepEqual(rows[0].links.map(link=>link.label),['활동지','교사용 설정']);
-    const module=base+'public/shared.js';
+    await page.locator('#save-app').click();
+    await page.waitForFunction(()=>!document.querySelector('#editor').open||document.querySelector('#editor-error').textContent);
+    assert.equal(await page.locator('#editor').evaluate(el=>el.open),false,await page.locator('#editor-error').textContent());
+    assert.equal(f.state.rows.length,1);assert.deepEqual(f.state.rows[0].links.map(link=>link.label),['활동지','교사용 설정']);
+    const first=f.state.rows[0].id,module=f.base+'/shared.js';
     await page.evaluate(async module=>{
       const {api}=await import(module);
       await api('/api/admin/apps',{method:'POST',body:{name:'두 번째 앱',url:'https://example.org/',category:'work',visible:true}});
-      const items=await api('/api/admin/apps');
-      await api('/api/admin/order',{method:'PUT',body:{ids:[items[1].id,items[0].id]}});
+      const rows=await api('/api/admin/apps');
+      await api('/api/admin/order',{method:'PUT',body:{ids:[rows[1].id,rows[0].id]}});
     },module);
-    assert.equal(rows.find(row=>row.id===first).position,1);
-    const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=';
+    assert.equal(f.state.rows.find(row=>row.id===first).position,1);
     await page.evaluate(async({module,first,png})=>{
       const {api}=await import(module);
-      await api(`/api/admin/apps/${first}`,{method:'PUT',body:{name:'수정된 이름',url:'https://example.com/',description:'수정',category:'mind',visible:false}});
+      await api(`/api/admin/apps/${first}`,{method:'PUT',body:{name:'수정된 이름',visible:false}});
       await api(`/api/admin/apps/${first}/thumbnail`,{method:'PUT',body:{image:png}});
     },{module,first,png});
-    assert.equal(rows.find(row=>row.id===first).visible,false);
-    assert.equal(rows.find(row=>row.id===first).links.length,2);
-    assert.equal(rows.find(row=>row.id===first).primary_label,'학생용');
-    assert.equal(uploaded.length,1);
-    assert.match(rows.find(row=>row.id===first).thumbnail,/^content\/thumbnails\//);
-    await page.evaluate(async({module,first})=>{
-      const {api}=await import(module);
-      await api(`/api/admin/apps/${first}/thumbnail`,{method:'PUT',body:{image:null}});
-      await api(`/api/admin/apps/${first}/capture`,{method:'POST'});
-    },{module,first});
-    assert.equal(rows.find(row=>row.id===first).thumbnail,null);
-    conflict=true;
-    const conflictMessage=await page.evaluate(async({module,first})=>{
-      const {api}=await import(module);
-      try {await api(`/api/admin/apps/${first}`,{method:'DELETE'});}catch(error){return error.message;}
-    },{module,first});
-    assert.match(conflictMessage,/다른 곳에서 목록이 변경/);
-    assert.equal(rows.length,2);
-    conflict=false;
-    await page.evaluate(async({module,first})=>{const {api}=await import(module);await api(`/api/admin/apps/${first}`,{method:'DELETE'});},{module,first});
-    assert.equal(rows.length,1);
+    assert.equal(f.state.rows.find(row=>row.id===first).visible,false);assert.equal(f.state.uploads.length,1);
+    const exchanges=f.state.exchanges;
+    await page.reload();await page.locator('#add-app').waitFor();assert.equal(f.state.exchanges,exchanges);
     assert.deepEqual(await page.evaluate(()=>[localStorage.length,sessionStorage.length]),[0,0]);
-    await page.reload();await page.locator('[name=token]').waitFor();
-    assert.equal(await page.locator('[name=token]').inputValue(),'');
-    await page.goto(base);await page.locator('.app-card').waitFor();assert.equal(await page.locator('.app-card').count(),1);
-    assert.deepEqual(errors,[]);
-  } finally {await browser?.close();await new Promise(resolve=>server.close(resolve));}
+    assert.equal((await page.evaluate(()=>document.cookie)).includes('vibe_session'),false);
+    await page.evaluate(async({module,first})=>{const {api}=await import(module);await api(`/api/admin/apps/${first}`,{method:'DELETE'});},{module,first});
+    assert.equal(f.state.rows.length,1);
+    assert.deepEqual(apiRequests,[]);
+    await page.locator('#logout').click();await page.locator('.oauth-button').waitFor();
+    await page.reload();await page.locator('.oauth-button').waitFor();
+    const outsider=await browser.newContext();
+    await outsider.route('https://github.com/**',route=>route.abort());
+    await outsider.route(f.base+'/auth/login',async route=>{
+      const response=await route.fetch({maxRedirects:0});
+      const state=new URL(response.headers().location).searchParams.get('state');
+      return route.fulfill({response,headers:{...response.headers(),location:`${f.base}/auth/callback?code=outsider-browser&state=${state}`}});
+    });
+    const otherPage=await outsider.newPage();await otherPage.goto(f.base+'/admin');await otherPage.locator('.oauth-button').click();
+    await otherPage.getByText('이 GitHub 계정은 관리자로 허용되지 않습니다. kalapui36 계정으로 로그인해 주세요.').waitFor();
+    assert.equal(await otherPage.locator('#add-app').count(),0);
+    const response=await outsider.request.get(f.base+'/api/admin/apps');assert.equal(response.status(),401);
+    await outsider.close();assert.deepEqual(errors,[]);
+  }finally{await browser?.close();await f.close();await new Promise(resolve=>server.close(resolve));}
 });

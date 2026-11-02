@@ -9,8 +9,15 @@
     "start": "node --env-file-if-exists=.env server.js",
     "dev": "node --watch --env-file-if-exists=.env server.js",
     "admin:password": "node scripts/set-password.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "start:auth": "node --use-env-proxy --env-file-if-exists=.env auth-server.js",
+    "test:oauth": "node --test test/oauth.test.js test/github-pages-admin.test.js"
   },
-  "engines": { "node": ">=24" },
-  "dependencies": { "express": "5.1.0", "playwright-core": "1.56.1" }
+  "engines": {
+    "node": ">=24.5.0"
+  },
+  "dependencies": {
+    "express": "5.1.0",
+    "playwright-core": "1.56.1"
+  }
 }

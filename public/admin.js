@@ -9,16 +9,34 @@ const homeUrl = isPages ? new URL('../', import.meta.url).href : '/';
 const main = document.querySelector('#admin-main'), editor = document.querySelector('#editor'), form = document.querySelector('#app-form');
 let apps=[], editing=null, imageChange=undefined, selectedFile=null, dragging=null, busy=false, toastTimer, polling;
 function toast(message) { const el=document.querySelector('#toast'); el.textContent=message; el.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,4500); }
-function errorMessage(error) { if(error.status===401) { editor.close(); clearInterval(polling); showLogin(true); } return error.message; }
-function showLogin(configured) {
-  const credentialField = isPages ? `<label class="field">GitHub 토큰<input name="token" type="password" autocomplete="off" spellcheck="false" required placeholder="발급한 토큰을 붙여넣으세요"></label><p class="field-hint">토큰은 이 탭에서만 사용하며 저장하지 않습니다. 새로고침하면 다시 입력해 주세요.</p><details class="token-guide"><summary>처음이라면 · 토큰 발급 방법</summary><ol><li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub 토큰 발급 페이지 ↗</a>를 엽니다.</li><li><b>Token name</b>은 알아볼 수 있는 이름을 쓰고, <b>Expiration</b>에서 만료일을 정합니다.</li><li><b>Resource owner</b>에서 <b>kalapui36</b>을 선택합니다.</li><li><b>Repository access</b> → <b>Only select repositories</b> → <b>vibe</b>를 선택합니다.</li><li><b>Repository permissions</b> → <b>Contents</b>를 <b>Read and write</b>로 설정합니다. Metadata는 자동으로 포함됩니다.</li><li><b>Generate token</b>을 누르고, 나온 토큰을 복사해 위 입력칸에 붙여넣은 뒤 로그인합니다.</li></ol><p>토큰은 발급 직후에만 보입니다. 코드에 넣거나 채팅에 보내지 마세요.</p></details>` : '<label class="field">비밀번호<input name="password" type="password" autocomplete="current-password" required placeholder="관리자 비밀번호"></label>';
+let sessionInfo={authenticated:false,configured:true,mode:isPages?'oauth':'password'};
+const oauthErrors={account:'이 GitHub 계정은 관리자로 허용되지 않습니다. kalapui36 계정으로 로그인해 주세요.',state:'로그인 확인이 만료되었습니다. GitHub 로그인을 다시 시작해 주세요.',cancelled:'GitHub 로그인이 취소되었습니다.',expired:'GitHub 인증이 만료되었습니다. 다시 로그인해 주세요.',provider:'GitHub 인증을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.'};
+function errorMessage(error) {
+  if(error.status===401||(error.status===403&&error.code==='access_denied')) {
+    editor.close();clearInterval(polling);sessionInfo=error.session||{...sessionInfo,authenticated:false};showLogin(sessionInfo,error.message);
+  }
+  return error.message;
+}
+function showLogin(session=sessionInfo,message='') {
+  sessionInfo=session;
   main.className='login-main';
-  main.innerHTML=`<section class="login-panel"><span class="eyebrow muted">MASTER ADMIN</span><h1>관리자 로그인</h1><p>웹앱과 공개 목록을 관리합니다.</p>${configured ? '<form id="login-form">'+credentialField+'<p id="login-error" class="form-error" role="alert"></p><button class="button primary" type="submit">로그인 <span>→</span></button></form>' : '<div class="setup-notice"><b>관리자 비밀번호 설정이 필요합니다.</b><p>서버 터미널에서 아래 명령을 실행해 주세요.</p><code>npm run admin:password</code><p>설정이 끝나면 페이지를 새로고침하세요.</p></div>'}<a class="back-link" href="${homeUrl}">← 공개 페이지로 돌아가기</a></section>`;
-  document.querySelector('#login-form')?.addEventListener('submit',async event=>{
-    event.preventDefault(); const button=event.target.querySelector('button'); button.disabled=true;
-    try { await api('/api/login',{ method:'POST',body:isPages?{token:event.target.elements.token.value}:{password:event.target.elements.password.value} }); await startDashboard(); }
-    catch(error) { document.querySelector('#login-error').textContent=error.message; }
-    finally { button.disabled=false; }
+  if(session.mode==='oauth') {
+    let destination='';
+    if(session.login_url){
+      const url=new URL(session.login_url,location.href);
+      if(url.protocol==='https:'||(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))destination=url.href;
+    }
+    main.innerHTML=`<section class="login-panel oauth-panel"><span class="eyebrow muted">관리자</span><h1>GitHub로 로그인</h1><p>kalapui36 계정만 웹앱을 수정할 수 있습니다.</p>${session.configured&&destination?`<a class="button primary oauth-button" href="${escape(destination)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1-4-2-6-2m12 4v-3.8c0-1 .1-1.6-.5-2.2 3.2-.4 6.5-1.5 6.5-7a5.5 5.5 0 0 0-1.5-3.8c.2-1 .2-2-.1-3.2 0 0-1.2-.4-3.9 1.5a13 13 0 0 0-7 0C5.3.6 4.1 1 4.1 1c-.3 1.2-.3 2.2-.1 3.2A5.5 5.5 0 0 0 2.5 8c0 5.5 3.3 6.6 6.5 7-.6.6-.6 1.4-.5 2.2V21"/></svg>GitHub로 로그인<span aria-hidden="true">↗</span></a><p class="field-hint oauth-hint">처음에는 GitHub에서 권한 승인이 필요합니다.<br>다른 기기에서도 GitHub 계정으로 로그인할 수 있습니다.</p>`:`<div class="setup-notice"><b>GitHub 로그인 초기 연결이 필요합니다.</b><p>관리자 서버 배포와 GitHub 인증 앱 설정을 마치면 로그인 버튼이 활성화됩니다.</p>${session.setup_url?`<a class="button secondary" href="${escape(session.setup_url)}" target="_blank" rel="noopener noreferrer">초기 연결 설정 열기 ↗</a>`:''}</div>`}<p class="form-error" role="alert">${escape(message)}</p><a class="back-link" href="${homeUrl}">← 공개 페이지로 돌아가기</a></section>`;
+    return;
+  }
+  const temporary=session.mode==='token';
+  const field=temporary?'<label class="field">GitHub 토큰<input name="token" type="password" autocomplete="off" required placeholder="기존 토큰"></label>':'<label class="field">비밀번호<input name="password" type="password" autocomplete="current-password" required placeholder="관리자 비밀번호"></label>';
+  main.innerHTML=`<section class="login-panel"><span class="eyebrow muted">관리자</span><h1>관리자 로그인</h1><p>웹앱과 공개 목록을 관리합니다.</p>${temporary?`<div class="setup-notice"><b>GitHub 로그인 초기 연결이 필요합니다.</b><p>연결 전까지 기존 토큰으로 관리할 수 있습니다. 연결 후에는 토큰 입력 없이 GitHub로 로그인합니다.</p><a href="${escape(session.setup_url)}" target="_blank" rel="noopener noreferrer">초기 연결 설정 열기 ↗</a></div>`:''}<form id="login-form">${field}<p id="login-error" class="form-error" role="alert">${escape(message)}</p><button class="button primary" type="submit">로그인 <span>→</span></button></form><a class="back-link" href="${homeUrl}">← 공개 페이지로 돌아가기</a></section>`;
+  document.querySelector('#login-form').addEventListener('submit',async event=>{
+    event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;
+    try{await api('/api/login',{method:'POST',body:temporary?{token:event.target.elements.token.value}:{password:event.target.elements.password.value}});await startDashboard();}
+    catch(error){const message=errorMessage(error),target=document.querySelector('#login-error');if(target)target.textContent=message;else toast(message);}
+    finally{button.disabled=false;}
   });
 }
 async function refresh() { apps=await api('/api/admin/apps'); renderDashboard(); }
@@ -31,9 +49,15 @@ async function startDashboard() {
 function renderDashboard() {
   main.innerHTML=`<div class="dashboard-heading"><div><span class="eyebrow muted">DASHBOARD</span><h1>웹앱 관리</h1><p>웹앱을 등록하고 공개 목록을 관리하세요.</p></div><div class="dashboard-actions"><button class="text-button" id="logout">로그아웃</button><button class="button primary" id="add-app">＋ 웹앱 추가</button></div></div><div class="stats"><div><span>전체 웹앱</span><b>${apps.length}<small>개</small></b></div><div><span>공개 중</span><b>${apps.filter(a=>a.visible).length}<small>개</small></b></div><div><span>숨김</span><b>${apps.filter(a=>!a.visible).length}<small>개</small></b></div></div><div class="admin-list-heading"><h2>등록된 웹앱 <span class="total-count">${apps.length}</span></h2><span>드래그 또는 화살표로 순서를 변경하세요.</span></div><div id="admin-list">${apps.length ? apps.map((app,index)=>`<article class="admin-row" draggable="true" data-id="${app.id}"><div class="order-controls"><span class="drag-handle" aria-hidden="true">⠿</span><button data-action="up" aria-label="${escape(app.name)} 위로 이동" ${index===0?'disabled':''}>↑</button><button data-action="down" aria-label="${escape(app.name)} 아래로 이동" ${index===apps.length-1?'disabled':''}>↓</button></div><div class="admin-thumb">${thumbnail(app)}</div><div class="admin-row-info"><span class="category-label ${app.category}"><i></i>${categories[app.category]}</span><h3>${escape(app.name)} <span class="status-pill ${app.visible?'published':''}">${app.visible?'공개':'숨김'}</span></h3><a href="${escape(app.url)}" target="_blank" rel="noopener noreferrer">${escape(app.url)} ↗</a><span class="capture-status ${app.capture_status==='failed'?'failed':''}">${app.thumbnail ? '직접 지정한 썸네일' : app.capture_status==='ready' ? '자동 썸네일' : app.capture_status==='failed' ? escape(captureMessages[app.capture_error] || captureMessages.unknown) : '첫 화면 캡처 중…'}</span></div><div class="row-actions"><button class="button compact secondary" data-action="capture" ${app.capture_status==='pending'?'disabled':''}>다시 캡처</button><button class="button compact secondary" data-action="edit">수정</button><button class="icon-button delete-button" data-action="delete" aria-label="${escape(app.name)} 삭제"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg></button></div></article>`).join('') : '<div class="empty-state"><div class="empty-icon">＋</div><h3>첫 웹앱을 등록해 보세요.</h3><p>주소를 입력하면 첫 화면을 썸네일로 가져옵니다.</p><button class="button secondary" id="first-app">웹앱 추가</button></div>'}</div>`;
   bindImageErrors(main);
+  if(sessionInfo.mode==='oauth'&&new URLSearchParams(location.search).get('connection')==='pending') {
+    const notice=document.createElement('div');notice.className='setup-notice connection-notice';
+    notice.innerHTML='<p>공개 페이지의 관리자 로그인 연결을 마무리해 주세요.</p><button class="button secondary" id="connect-site">공개 페이지에 연결</button>';
+    main.prepend(notice);
+    notice.querySelector('button').onclick=async()=>{try{await api('/api/admin/connect',{method:'POST'});const url=new URL(location.href);url.searchParams.delete('connection');history.replaceState(null,'',url);notice.remove();toast('공개 페이지에 연결했습니다. 배포 후 로그인 버튼을 이용할 수 있습니다.');}catch(error){toast(errorMessage(error));}};
+  }
   document.querySelector('#add-app').onclick=()=>openEditor();
   document.querySelector('#first-app')?.addEventListener('click',()=>openEditor());
-  document.querySelector('#logout').onclick=async()=>{ try { await api('/api/logout',{method:'POST'}); clearInterval(polling); showLogin(true); } catch(error) {toast(errorMessage(error));} };
+  document.querySelector('#logout').onclick=async()=>{ try { await api('/api/logout',{method:'POST'}); clearInterval(polling); showLogin({...sessionInfo,authenticated:false}); } catch(error) {toast(errorMessage(error));} };
   main.querySelectorAll('.admin-row').forEach(row=>{
     row.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',()=>rowAction(row.dataset.id,button.dataset.action)));
     row.addEventListener('dragstart',event=>{ if(event.target.closest('button,a')) {event.preventDefault();return;} dragging=row.dataset.id; event.dataTransfer.setData('text/plain',dragging); row.classList.add('dragging'); });
@@ -109,4 +133,9 @@ form.addEventListener('submit',async event=>{
   }catch(error){document.querySelector('#editor-error').textContent=errorMessage(error);}
   finally{busy=false;document.querySelector('#save-app').disabled=false;}
 });
-try {const session=await api('/api/session');if(session.authenticated)await startDashboard();else showLogin(session.configured);}catch(error){main.innerHTML=`<div class="empty-state"><h2>서버에 연결하지 못했습니다.</h2><p>${escape(error.message)}</p></div>`;}
+try {
+  const session=await api('/api/session');sessionInfo=session;
+  const query=new URLSearchParams(location.search),message=oauthErrors[query.get('auth_error')]||'';
+  if(query.has('auth_error')){const url=new URL(location.href);url.searchParams.delete('auth_error');history.replaceState(null,'',url);}
+  if(session.authenticated)await startDashboard();else showLogin(session,message);
+}catch(error){main.innerHTML=`<div class="empty-state"><h2>관리자 연결을 확인해 주세요.</h2><p>${escape(error.message)}</p><a class="back-link" href="${homeUrl}">← 공개 페이지로 돌아가기</a></div>`;}

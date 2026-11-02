@@ -8,3 +8,5 @@
 .related-heading{display:flex;justify-content:space-between;align-items:center;margin-top:23px}.related-heading h3{font-size:12px}.related-row{display:grid;grid-template-columns:110px 1fr 70px;gap:8px;align-items:start;margin-top:10px}.related-row input{min-width:0;width:100%;border:1px solid #dfe4ec;border-radius:7px;padding:10px;font-size:12px}.related-row .remove-link{font-size:22px}.related-row input:focus-visible{outline-offset:2px}.capture-status{line-height:1.7}.primary-label-field{margin-top:15px}
 
 .link-actions{display:flex;gap:2px;align-items:center}.link-actions .icon-button{font-size:17px;padding:7px 3px}.related-row .remove-link{font-size:23px}.admin-thumb img.preview-art{object-fit:contain;background:#edf2eb;padding:7px}
+
+.oauth-panel>p{line-height:1.8}.oauth-button{width:100%;margin-top:12px;min-height:47px;text-align:center}.oauth-button svg{width:21px;height:21px;flex-shrink:0}.oauth-button span{margin-left:auto}.oauth-hint{margin-top:17px;line-height:1.9!important}.connection-notice{margin:0 0 25px}.connection-notice .button{margin-top:10px}.oauth-panel .form-error:empty{display:none}

@@ -1,3 +1,4 @@
+let catalogRevision=null;
 export const categories = { class: '수업', mind: '사회정서교육', work: '업무' };
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
 export const isPages = document.querySelector('meta[name="vibe-runtime"]')?.content === 'pages';
@@ -16,10 +17,12 @@ export async function api(path, options = {}) {
       return { ...row, image:image?new URL(image,new URL('../',import.meta.url)).href:null, preview:row.preview?new URL(row.preview,new URL('../',import.meta.url)).href:null };
     });
   }
-  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', 'X-Vibe-Request': '1', ...options.headers }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
+  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', 'X-Vibe-Request': '1', ...(catalogRevision&&path.startsWith('/api/admin/')?{'If-Match':catalogRevision}:{}), ...options.headers }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
+  const revision=response.headers.get('X-Catalog-Revision');
+  if(revision)catalogRevision=revision;
   let data;
   try { data = await response.json(); } catch { throw new Error('서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'); }
-  if (!response.ok) { const error = new Error(data.error || '요청에 실패했습니다.'); error.status = response.status; throw error; }
+  if (!response.ok) { const error = new Error(data.error || '요청에 실패했습니다.'); error.status = response.status; error.code=data.code; throw error; }
   return data;
 }
 export const captureMessages = {

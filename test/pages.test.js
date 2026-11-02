@@ -22,17 +22,18 @@ test('GitHub Pages /vibe/ 경로에서 화면·목록·필터·관리자 안내�
     page.on('response', response => { if (response.status() >= 400) responses.push(`${response.status()} ${response.url()}`); });
     const url=`http://127.0.0.1:${server.address().port}/vibe/`;
     await page.route('**/content/apps.json', route => route.fulfill({json:[]}));
+    await page.route(url+'content/config.json',route=>route.fulfill({json:{owner:'kalapui36',repo:'vibe',branch:'main'}}));
     await page.goto(url);
     await page.getByText('아직 등록된 웹앱이 없습니다.').waitFor();
     assert.equal(await page.title(), '3색 바이브코딩');
     assert.match(await page.locator('link[rel=stylesheet]').getAttribute('href'), /^\.\/public\//);
     await page.locator('.admin-link').click();
     assert.equal(page.url(),url+'manage.html');
-    await page.locator('[name=token]').waitFor();
-    assert.equal(await page.locator('[name=password]').count(),0);
+    await page.getByText('GitHub 로그인 초기 연결이 필요합니다.').waitFor();
+    assert.equal(await page.locator('[name=password]').count(),0);assert.equal(await page.locator('[name=token]').count(),1);
     await page.getByRole('link',{name:'← 공개 페이지로 돌아가기'}).click();
     assert.equal(page.url(),url);
-    await page.goto(url+'admin/');await page.locator('[name=token]').waitFor();
+    await page.goto(url+'admin/');await page.getByText('GitHub 로그인 초기 연결이 필요합니다.').waitFor();
     await page.getByRole('link',{name:'← 공개 페이지로 돌아가기'}).click();
     assert.equal(page.url(),url);
     await page.route('**/content/apps.json', route => route.fulfill({json:[
@@ -70,6 +71,16 @@ test('GitHub Pages /vibe/ 경로에서 화면·목록·필터·관리자 안내�
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     await page.locator('#reset-filters').click();await page.locator('[data-category=class]').click();
     assert.equal(await page.locator('.app-item').evaluate(el=>getComputedStyle(el).display),'flex');
+    await page.route(url+'content/config.json',route=>route.fulfill({json:{owner:'kalapui36',repo:'vibe',branch:'main',auth_url:'https://admin.example.test'}}));
+    const switchResult=await page.evaluate(async module=>{
+      const {api}=await import(module);
+      const session=await api('/api/session');
+      let blocked;
+      try{await api('/api/login',{method:'POST',body:{token:'not-a-real-token'}});}catch(error){blocked={status:error.status,code:error.code};}
+      return {session,blocked};
+    },url+'public/shared.js');
+    assert.equal(switchResult.session.mode,'oauth');assert.equal(switchResult.session.login_url,'https://admin.example.test/auth/login');
+    assert.deepEqual(switchResult.blocked,{status:401,code:'oauth_required'});
     assert.deepEqual(errors,[]);
     assert.deepEqual(responses,[]);
   } finally { await browser?.close(); await new Promise(resolve=>server.close(resolve)); }

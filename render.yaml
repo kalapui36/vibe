@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: vibe-admin
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm ci
+    startCommand: npm run start:auth
+    healthCheckPath: /healthz
+    buildFilter:
+      paths:
+        - auth-server.js
+        - lib/**
+        - public/**
+        - package.json
+        - package-lock.json
+        - render.yaml
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: PUBLIC_BASE_URL
+        value: https://kalapui.com/vibe/
+      - key: GITHUB_ALLOWED_USER
+        value: kalapui36
+      - key: GITHUB_OWNER
+        value: kalapui36
+      - key: GITHUB_REPO
+        value: vibe
+      - key: GITHUB_BRANCH
+        value: main
+      - key: AUTH_SESSION_SECRET
+        generateValue: true
