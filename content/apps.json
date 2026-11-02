@@ -9,7 +9,7 @@
     "position": 0,
     "thumbnail": null,
     "capture": "content/thumbnails/nambu-source-preview.jpg",
-    "capture_status": "pending",
+    "capture_status": "failed",
     "created_at": "2026-11-02T13:30:33.274337+00:00",
     "capture_source": "repository-preview"
   },
@@ -23,7 +23,7 @@
     "position": 1,
     "thumbnail": null,
     "capture": null,
-    "capture_status": "pending",
+    "capture_status": "failed",
     "created_at": "2026-11-02T13:30:33.274882+00:00"
   },
   {
@@ -36,7 +36,7 @@
     "position": 2,
     "thumbnail": null,
     "capture": "content/thumbnails/11.2-6-source-preview.jpg",
-    "capture_status": "pending",
+    "capture_status": "failed",
     "created_at": "2026-11-02T13:30:33.274906+00:00",
     "capture_source": "repository-preview"
   }
