@@ -17,6 +17,7 @@ const admin = (await read('public/admin.html'))
   .replace('<head>', '<head><meta name="vibe-runtime" content="pages">')
   .replaceAll('href="/favicon.svg"', 'href="../public/favicon.svg"')
   .replaceAll('href="/style.css"', 'href="../public/style.css"')
+  .replaceAll('href="/admin.css"', 'href="../public/admin.css"')
   .replaceAll('src="/admin.js"', 'src="../public/admin.js"')
   .replaceAll('href="/"', 'href="../"');
 await write('admin/index.html', admin);

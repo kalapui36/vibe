@@ -14,9 +14,11 @@ for (const row of rows) {
     row.capture = file;
     row.capture_status = 'ready';
     row.capture_source = 'live';
-  } catch {
+    row.capture_error = null;
+  } catch (error) {
     row.capture_status = 'failed';
-    console.log(`Capture failed for ${row.id}; manual thumbnail upload is available.`);
+    row.capture_error = ['dns','browser','navigation','http','screenshot'].includes(error.captureStage) ? error.captureStage : 'unknown';
+    console.log(`Capture failed (${row.capture_error}) for ${row.id}; manual thumbnail upload is available.`);
   }
 }
 await writeFile(path, JSON.stringify(rows, null, 2) + '\n');

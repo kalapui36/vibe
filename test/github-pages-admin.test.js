@@ -40,10 +40,15 @@ test('Pages 관리자가 GitHub Contents API로 등록·수정·정렬·썸네�
     await page.locator('#app-form [name=name]').fill('학급 활동');
     await page.locator('#app-form [name=url]').fill('https://example.com/');
     await page.locator('#app-form [name=description]').fill('한글 설명을 저장합니다.');
+    await page.locator('#app-form [name=primary_label]').fill('학생용');
+    await page.locator('#add-link').click();await page.locator('.link-label').fill('교사용 설정');await page.locator('.link-url').fill('https://example.com/teacher');
+    await page.locator('#add-link').click();await page.locator('.link-label').nth(1).fill('활동지');await page.locator('.link-url').nth(1).fill('https://example.com/worksheet');
+    await page.locator('.link-up').nth(1).click();
     await page.locator('#save-app').click();await page.waitForFunction(()=>!document.querySelector('#editor').open || document.querySelector('#editor-error').textContent);
     assert.equal(await page.locator('#editor').evaluate(dialog=>dialog.open),false,await page.locator('#editor-error').textContent());
     assert.equal(rows.length,1);assert.equal(rows[0].name,'학급 활동');assert.equal(rows[0].capture_status,'pending');
     const first=rows[0].id;
+    assert.equal(rows[0].primary_label,'학생용');assert.deepEqual(rows[0].links.map(link=>link.label),['활동지','교사용 설정']);
     const module=base+'public/shared.js';
     await page.evaluate(async module=>{
       const {api}=await import(module);
@@ -59,6 +64,8 @@ test('Pages 관리자가 GitHub Contents API로 등록·수정·정렬·썸네�
       await api(`/api/admin/apps/${first}/thumbnail`,{method:'PUT',body:{image:png}});
     },{module,first,png});
     assert.equal(rows.find(row=>row.id===first).visible,false);
+    assert.equal(rows.find(row=>row.id===first).links.length,2);
+    assert.equal(rows.find(row=>row.id===first).primary_label,'학생용');
     assert.equal(uploaded.length,1);
     assert.match(rows.find(row=>row.id===first).thumbnail,/^content\/thumbnails\//);
     await page.evaluate(async({module,first})=>{

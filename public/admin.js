@@ -1,4 +1,5 @@
-import { api, escape, categories, thumbnail, bindImageErrors, isPages } from './shared.js';
+import { relatedLinks, primaryLabel } from './catalog.js';
+import { api, escape, categories, thumbnail, bindImageErrors, isPages, captureMessages } from './shared.js';
 if (isPages && location.protocol === 'http:' && !['localhost','127.0.0.1','[::1]'].includes(location.hostname)) {
   const secureUrl = new URL(location.href);
   secureUrl.protocol = 'https:';
@@ -27,7 +28,7 @@ async function startDashboard() {
   polling=setInterval(async()=>{ if(!document.hidden && !editor.open && !dragging && !busy && !document.querySelector('#delete-dialog').open && apps.some(app=>app.capture_status==='pending')) { try { await refresh(); } catch(error) { errorMessage(error); } } },isPages?15000:4000);
 }
 function renderDashboard() {
-  main.innerHTML=`<div class="dashboard-heading"><div><span class="eyebrow muted">DASHBOARD</span><h1>웹앱 관리</h1><p>웹앱을 등록하고 공개 목록을 관리하세요.</p></div><div class="dashboard-actions"><button class="text-button" id="logout">로그아웃</button><button class="button primary" id="add-app">＋ 웹앱 추가</button></div></div><div class="stats"><div><span>전체 웹앱</span><b>${apps.length}<small>개</small></b></div><div><span>공개 중</span><b>${apps.filter(a=>a.visible).length}<small>개</small></b></div><div><span>숨김</span><b>${apps.filter(a=>!a.visible).length}<small>개</small></b></div></div><div class="admin-list-heading"><h2>등록된 웹앱 <span class="total-count">${apps.length}</span></h2><span>드래그 또는 화살표로 순서를 변경하세요.</span></div><div id="admin-list">${apps.length ? apps.map((app,index)=>`<article class="admin-row" draggable="true" data-id="${app.id}"><div class="order-controls"><span class="drag-handle" aria-hidden="true">⠿</span><button data-action="up" aria-label="${escape(app.name)} 위로 이동" ${index===0?'disabled':''}>↑</button><button data-action="down" aria-label="${escape(app.name)} 아래로 이동" ${index===apps.length-1?'disabled':''}>↓</button></div><div class="admin-thumb">${thumbnail(app)}</div><div class="admin-row-info"><span class="category-label ${app.category}"><i></i>${categories[app.category]}</span><h3>${escape(app.name)} <span class="status-pill ${app.visible?'published':''}">${app.visible?'공개':'숨김'}</span></h3><a href="${escape(app.url)}" target="_blank" rel="noopener noreferrer">${escape(app.url)} ↗</a><span class="capture-status ${app.capture_status==='failed'?'failed':''}">${app.thumbnail ? '직접 지정한 썸네일' : app.capture_status==='ready' ? '자동 썸네일' : app.capture_status==='failed' ? '자동 캡처 실패 · 재시도하거나 이미지를 올려 주세요.' : '첫 화면 캡처 중…'}</span></div><div class="row-actions"><button class="button compact secondary" data-action="capture" ${app.capture_status==='pending'?'disabled':''}>다시 캡처</button><button class="button compact secondary" data-action="edit">수정</button><button class="icon-button delete-button" data-action="delete" aria-label="${escape(app.name)} 삭제"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg></button></div></article>`).join('') : '<div class="empty-state"><div class="empty-icon">＋</div><h3>첫 웹앱을 등록해 보세요.</h3><p>주소를 입력하면 첫 화면을 썸네일로 가져옵니다.</p><button class="button secondary" id="first-app">웹앱 추가</button></div>'}</div>`;
+  main.innerHTML=`<div class="dashboard-heading"><div><span class="eyebrow muted">DASHBOARD</span><h1>웹앱 관리</h1><p>웹앱을 등록하고 공개 목록을 관리하세요.</p></div><div class="dashboard-actions"><button class="text-button" id="logout">로그아웃</button><button class="button primary" id="add-app">＋ 웹앱 추가</button></div></div><div class="stats"><div><span>전체 웹앱</span><b>${apps.length}<small>개</small></b></div><div><span>공개 중</span><b>${apps.filter(a=>a.visible).length}<small>개</small></b></div><div><span>숨김</span><b>${apps.filter(a=>!a.visible).length}<small>개</small></b></div></div><div class="admin-list-heading"><h2>등록된 웹앱 <span class="total-count">${apps.length}</span></h2><span>드래그 또는 화살표로 순서를 변경하세요.</span></div><div id="admin-list">${apps.length ? apps.map((app,index)=>`<article class="admin-row" draggable="true" data-id="${app.id}"><div class="order-controls"><span class="drag-handle" aria-hidden="true">⠿</span><button data-action="up" aria-label="${escape(app.name)} 위로 이동" ${index===0?'disabled':''}>↑</button><button data-action="down" aria-label="${escape(app.name)} 아래로 이동" ${index===apps.length-1?'disabled':''}>↓</button></div><div class="admin-thumb">${thumbnail(app)}</div><div class="admin-row-info"><span class="category-label ${app.category}"><i></i>${categories[app.category]}</span><h3>${escape(app.name)} <span class="status-pill ${app.visible?'published':''}">${app.visible?'공개':'숨김'}</span></h3><a href="${escape(app.url)}" target="_blank" rel="noopener noreferrer">${escape(app.url)} ↗</a><span class="capture-status ${app.capture_status==='failed'?'failed':''}">${app.thumbnail ? '직접 지정한 썸네일' : app.capture_status==='ready' ? '자동 썸네일' : app.capture_status==='failed' ? escape(captureMessages[app.capture_error] || captureMessages.unknown) : '첫 화면 캡처 중…'}</span></div><div class="row-actions"><button class="button compact secondary" data-action="capture" ${app.capture_status==='pending'?'disabled':''}>다시 캡처</button><button class="button compact secondary" data-action="edit">수정</button><button class="icon-button delete-button" data-action="delete" aria-label="${escape(app.name)} 삭제"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg></button></div></article>`).join('') : '<div class="empty-state"><div class="empty-icon">＋</div><h3>첫 웹앱을 등록해 보세요.</h3><p>주소를 입력하면 첫 화면을 썸네일로 가져옵니다.</p><button class="button secondary" id="first-app">웹앱 추가</button></div>'}</div>`;
   bindImageErrors(main);
   document.querySelector('#add-app').onclick=()=>openEditor();
   document.querySelector('#first-app')?.addEventListener('click',()=>openEditor());
@@ -63,13 +64,30 @@ async function rowAction(id,action) {
 function openEditor(app=null) {
   editing=app;imageChange=undefined;selectedFile=null;form.reset();
   document.querySelector('#editor-title').textContent=app?'웹앱 수정':'웹앱 추가';
+  form.elements.primary_label.value=app?.primary_label||'';document.querySelector('#related-links').replaceChildren();for(const link of app?.links||[])addLinkRow(link);updateLinkControls();
   form.elements.name.value=app?.name||'';form.elements.url.value=app?.url||'';form.elements.description.value=app?.description||'';form.elements.category.value=app?.category||'class';form.elements.visible.checked=app?.visible??true;
   document.querySelector('#editor-error').textContent='';document.querySelector('#save-app').disabled=false;preview();editor.showModal();
 }
 function preview() {
-  const source=imageChange===null?editing?.capture:imageChange||editing?.image;
+  const raw=imageChange===null?editing?.capture:imageChange||editing?.image;
+  const source=raw&&isPages?new URL(raw,new URL('../',import.meta.url)).href:raw;
   document.querySelector('#image-preview').innerHTML=source?`<img src="${escape(source)}" alt="썸네일 미리보기">`:'<div class="preview-placeholder">웹앱 첫 화면을 자동으로 가져옵니다.</div>';
 }
+function updateLinkControls() {
+  const rows=[...document.querySelectorAll('.related-row')];
+  document.querySelector('#add-link').disabled=rows.length>=6;
+  rows.forEach((row,index)=>{row.querySelector('.link-up').disabled=index===0;row.querySelector('.link-down').disabled=index===rows.length-1;});
+}
+function addLinkRow(link={}) {
+  if(document.querySelectorAll('.related-row').length>=6)return;
+  const row=document.createElement('div');row.className='related-row';
+  row.innerHTML=`<input class="link-label" maxlength="40" required aria-label="관련 주소 이름" placeholder="교사용 설정" value="${escape(link.label||'')}"><input class="link-url" type="url" required aria-label="관련 웹 주소" placeholder="https://" value="${escape(link.url||'')}"><div class="link-actions"><button type="button" class="icon-button link-up" aria-label="관련 주소 위로 이동">↑</button><button type="button" class="icon-button link-down" aria-label="관련 주소 아래로 이동">↓</button><button type="button" class="icon-button remove-link" aria-label="관련 주소 삭제">×</button></div>`;
+  row.querySelector('.remove-link').onclick=()=>{row.remove();updateLinkControls();};
+  row.querySelector('.link-up').onclick=()=>{row.previousElementSibling?.before(row);updateLinkControls();};
+  row.querySelector('.link-down').onclick=()=>{row.nextElementSibling?.after(row);updateLinkControls();};
+  document.querySelector('#related-links').appendChild(row);updateLinkControls();
+}
+document.querySelector('#add-link').onclick=()=>{addLinkRow();document.querySelector('.related-row:last-child .link-label')?.focus();};
 document.querySelector('#thumbnail-file').addEventListener('change',async event=>{
   const file=event.target.files[0];if(!file)return;
   if(file.size>4*1024*1024||!['image/png','image/jpeg','image/webp'].includes(file.type)){document.querySelector('#editor-error').textContent='JPG, PNG, WebP 파일을 4MB 이하로 올려 주세요.';event.target.value='';return;}
@@ -81,7 +99,7 @@ editor.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
 form.addEventListener('submit',async event=>{
   event.preventDefault();if(busy)return;busy=true;document.querySelector('#save-app').disabled=true;document.querySelector('#editor-error').textContent='';
   try {
-    const payload={name:form.elements.name.value,url:form.elements.url.value,description:form.elements.description.value,category:form.elements.category.value,visible:form.elements.visible.checked};
+    const payload={name:form.elements.name.value,url:form.elements.url.value,description:form.elements.description.value,category:form.elements.category.value,visible:form.elements.visible.checked,primary_label:primaryLabel(form.elements.primary_label.value),links:relatedLinks([...document.querySelectorAll('.related-row')].map(row=>({label:row.querySelector('.link-label').value,url:row.querySelector('.link-url').value})))};
     let id=editing?.id;
     if(id) await api(`/api/admin/apps/${id}`,{method:'PUT',body:payload});
     else {const created=await api('/api/admin/apps',{method:'POST',body:payload});id=created.id;editing=created;}

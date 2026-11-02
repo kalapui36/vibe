@@ -7,7 +7,7 @@ const queue = [];
 let running = false;
 export function scheduleCapture(id) {
   if (!queue.includes(id)) queue.push(id);
-  db.prepare("UPDATE apps SET capture_status='pending' WHERE id=?").run(id);
+  db.prepare("UPDATE apps SET capture_status='pending',capture_error=NULL WHERE id=?").run(id);
   void drain();
 }
 async function drain() {
@@ -20,9 +20,10 @@ async function drain() {
     try {
       const file = `${id}-${Date.now()}.jpg`;
       await capturePage(app.url, resolve(dataDir, 'thumbnails', file));
-      db.prepare("UPDATE apps SET capture=?, capture_status='ready' WHERE id=? AND url=?").run(`/thumbnails/${file}`, id, app.url);
-    } catch {
-      db.prepare("UPDATE apps SET capture_status='failed' WHERE id=? AND url=?").run(id, app.url);
+      db.prepare("UPDATE apps SET capture=?, capture_status='ready',capture_error=NULL WHERE id=? AND url=?").run(`/thumbnails/${file}`, id, app.url);
+    } catch (error) {
+      const stage=['dns','browser','navigation','http','screenshot'].includes(error.captureStage)?error.captureStage:'unknown';
+      db.prepare("UPDATE apps SET capture_status='failed',capture_error=? WHERE id=? AND url=?").run(stage,id,app.url);
     }
   }
   running = false;

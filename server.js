@@ -1,3 +1,4 @@
+import { relatedLinks, primaryLabel } from './public/catalog.js';
 import express from 'express';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
@@ -62,7 +63,7 @@ app.post('/api/logout', (req, res) => {
   if (token) db.prepare('DELETE FROM sessions WHERE token=?').run(tokenHash(token));
   res.clearCookie('vibe_session', { path: '/' }); res.json({ ok: true });
 });
-function serialize(row) { return { ...row, visible: !!row.visible, image: row.thumbnail || row.capture || null }; }
+function serialize(row) { return { ...row, visible: !!row.visible, links: JSON.parse(row.links || '[]'), image: row.thumbnail || row.capture || null }; }
 app.get('/api/apps', (req, res) => res.json(db.prepare('SELECT * FROM apps WHERE visible=1 ORDER BY position, created_at').all().map(serialize)));
 app.get('/api/admin/apps', admin, (req, res) => res.json(db.prepare('SELECT * FROM apps ORDER BY position, created_at').all().map(serialize)));
 async function validate(body) {
@@ -70,13 +71,13 @@ async function validate(body) {
   const description = String(body.description || '').trim();
   if (!name || name.length > 80 || description.length > 240) throw new Error('이름은 1~80자, 설명은 240자 이내로 입력해 주세요.');
   if (!['class', 'mind', 'work'].includes(body.category)) throw new Error('분류를 선택해 주세요.');
-  return { name, description, url: normalizeUrl(body.url), category: body.category, visible: body.visible === false ? 0 : 1 };
+  return { name, description, url: normalizeUrl(body.url), category: body.category, visible: body.visible === false ? 0 : 1, primary_label: primaryLabel(body.primary_label), links:relatedLinks(body.links).map(link=>({...link,url:normalizeUrl(link.url)})) };
 }
 app.post('/api/admin/apps', admin, async (req, res) => {
   const value = await validate(req.body);
   const id = randomUUID();
   const position = db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS position FROM apps').get().position;
-  db.prepare('INSERT INTO apps (id,name,url,description,category,visible,position) VALUES (?,?,?,?,?,?,?)').run(id,value.name,value.url,value.description,value.category,value.visible,position);
+  db.prepare('INSERT INTO apps (id,name,url,description,category,visible,position,primary_label,links) VALUES (?,?,?,?,?,?,?,?,?)').run(id,value.name,value.url,value.description,value.category,value.visible,position,value.primary_label,JSON.stringify(value.links));
   scheduleCapture(id); res.status(201).json(serialize(db.prepare('SELECT * FROM apps WHERE id=?').get(id)));
 });
 app.put('/api/admin/order', admin, (req, res) => {
@@ -91,8 +92,8 @@ app.put('/api/admin/order', admin, (req, res) => {
 app.put('/api/admin/apps/:id', admin, async (req, res) => {
   const old = db.prepare('SELECT * FROM apps WHERE id=?').get(req.params.id);
   if (!old) return res.status(404).json({ error: '웹앱을 찾을 수 없습니다.' });
-  const v = await validate(req.body);
-  db.prepare('UPDATE apps SET name=?,url=?,description=?,category=?,visible=? WHERE id=?').run(v.name,v.url,v.description,v.category,v.visible,old.id);
+  const v = await validate({...serialize(old),...req.body});
+  db.prepare('UPDATE apps SET name=?,url=?,description=?,category=?,visible=?,primary_label=?,links=? WHERE id=?').run(v.name,v.url,v.description,v.category,v.visible,v.primary_label,JSON.stringify(v.links),old.id);
   if (old.url !== v.url) { db.prepare('UPDATE apps SET capture=NULL WHERE id=?').run(old.id); scheduleCapture(old.id); }
   res.json({ ok: true });
 });

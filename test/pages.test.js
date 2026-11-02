@@ -32,7 +32,7 @@ test('GitHub Pages /vibe/ 경로에서 화면·목록·필터·관리자 안내�
     assert.equal(await page.locator('[name=password]').count(),0);
     await page.getByRole('link',{name:'← 공개 페이지로 돌아가기'}).click();
     await page.route('**/content/apps.json', route => route.fulfill({json:[
-      {id:'fixture-1',name:'수업 도구',description:'학습 자료',category:'class',url:'https://example.com/',visible:true,position:1},
+      {id:'fixture-1',name:'수업 도구',description:'학습 자료',category:'class',url:'https://example.com/',visible:true,position:1,primary_label:'학생용',links:[{label:'교사용 설정',url:'https://example.com/teacher'}]},
       {id:'fixture-2',name:'업무 도구',description:'일정',category:'work',url:'https://example.org/',visible:true,position:0},
       {id:'fixture-3',name:'숨김',category:'mind',url:'https://example.net/',visible:false},
       {id:'fixture-4',name:'잘못된 주소',category:'class',url:'javascript:alert(1)',visible:true}
@@ -44,10 +44,28 @@ test('GitHub Pages /vibe/ 경로에서 화면·목록·필터·관리자 안내�
     await page.locator('[data-category=class]').click();
     assert.equal(await page.locator('.app-card').count(),1);
     assert.equal(await page.locator('.app-card').getAttribute('href'),'https://example.com/');
+    assert.equal(await page.locator('.app-grid').getAttribute('data-layout'),'single');
+    assert.equal(await page.locator('.app-item').evaluate(el=>getComputedStyle(el).display),'grid');
+    assert.equal(await page.locator('.app-card a').count(),0);
+    assert.equal(await page.locator('.related-link').getAttribute('href'),'https://example.com/teacher');
+    await page.context().route('https://example.com/**',route=>route.fulfill({contentType:'text/html',body:'<title>fixture</title>'}));
+    let popupReady=page.waitForEvent('popup');
+    await page.locator('.related-link').click();
+    let popup=await popupReady;await popup.waitForURL('https://example.com/teacher');await popup.close();
+    popupReady=page.waitForEvent('popup');await page.locator('.card-description').click();
+    popup=await popupReady;await popup.waitForURL('https://example.com/');await popup.close();
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.locator('[data-category=work]').click();
+    assert.equal(await page.locator('#results').evaluate(el=>el.getAnimations().length),0);
+    await page.locator('[data-category=class]').focus();await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('.tab.active').getAttribute('data-category'),'mind');
+    await page.locator('[data-category=class]').click();
     await page.locator('#search').fill('없는 검색어');
     await page.getByText('검색 결과가 없습니다.').waitFor();
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    await page.locator('#reset-filters').click();await page.locator('[data-category=class]').click();
+    assert.equal(await page.locator('.app-item').evaluate(el=>getComputedStyle(el).display),'flex');
     assert.deepEqual(errors,[]);
     assert.deepEqual(responses,[]);
   } finally { await browser?.close(); await new Promise(resolve=>server.close(resolve)); }

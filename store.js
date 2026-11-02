@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS apps (
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );`);
 
+const columns = new Set(db.prepare('PRAGMA table_info(apps)').all().map(column => column.name));
+for (const [name, definition] of [['primary_label', "TEXT NOT NULL DEFAULT ''"], ['links', "TEXT NOT NULL DEFAULT '[]'"], ['capture_error', 'TEXT']]) {
+  if (!columns.has(name)) db.exec(`ALTER TABLE apps ADD COLUMN ${name} ${definition}`);
+}
+
 export function hashPassword(password) {
   const salt = randomBytes(16).toString('hex');
   return `${salt}:${scryptSync(password, salt, 64).toString('hex')}`;

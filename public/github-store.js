@@ -1,3 +1,4 @@
+import { webAddress, relatedLinks, primaryLabel } from './catalog.js';
 // Credentials stay in memory for this tab. No localStorage, public file, or URL tokens.
 let token = '';
 let config;
@@ -36,7 +37,7 @@ function encode(value) {
 }
 function decorate(row) {
   const image = row.thumbnail || row.capture || null;
-  return { ...row, image: image ? new URL(image, baseUrl).href : null };
+  return { ...row, image: image ? new URL(image, baseUrl).href : null, preview:row.preview?new URL(row.preview,baseUrl).href:null };
 }
 async function load() {
   const { branch } = await settings();
@@ -58,7 +59,7 @@ function validated(body) {
   try { url = new URL(body.url); } catch { throw new Error('웹 주소를 확인해 주세요.'); }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('HTTP 또는 HTTPS 주소를 입력해 주세요.');
   if (!name || name.length > 80 || description.length > 240 || !categories.has(body.category)) throw new Error('이름, 설명, 분류를 확인해 주세요.');
-  return { name, description, url:url.href, category:body.category, visible:body.visible !== false };
+  return { name, description, url:webAddress(url.href), category:body.category, visible:body.visible !== false, primary_label:primaryLabel(body.primary_label), links:relatedLinks(body.links) };
 }
 export async function pagesApi(path, options = {}) {
   const method = options.method || 'GET', body = options.body;
@@ -92,12 +93,12 @@ export async function pagesApi(path, options = {}) {
   const row=match && rows.find(row=>row.id===match[1]);
   if (!row) throw new Error('웹앱을 찾을 수 없습니다.');
   if (!match[2] && method==='PUT') {
-    const value=validated(body);
-    if(row.url!==value.url){row.capture=null;row.capture_status='pending';}
+    const value=validated({...row,...body});
+    if(row.url!==value.url){row.capture=null;row.capture_status='pending';row.capture_error=null;}
     Object.assign(row,value);await save(rows,'Update web app');return {ok:true};
   }
   if (!match[2] && method==='DELETE') {await save(rows.filter(item=>item.id!==row.id),'Delete web app');return {ok:true};}
-  if (match[2]==='capture') {row.capture_status='pending';await save(rows,'Refresh web app screenshot');return {ok:true};}
+  if (match[2]==='capture') {row.capture_status='pending';row.capture_error=null;await save(rows,'Refresh web app screenshot');return {ok:true};}
   if (match[2]==='thumbnail') {
     if(body.image===null)row.thumbnail=null;
     else {
