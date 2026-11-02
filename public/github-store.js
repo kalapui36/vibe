@@ -23,7 +23,7 @@ async function github(path, { method = 'GET', body } = {}) {
   });
   if (!response.ok) {
     if (response.status === 401) { token = ''; snapshot = null; }
-    const message = response.status === 401 ? '토큰이 만료되었거나 올바르지 않습니다.' : response.status === 403 ? '저장소의 Contents 읽기·쓰기 권한을 확인해 주세요.' : response.status === 404 ? '저장소를 찾을 수 없습니다. 토큰의 저장소 접근 권한을 확인해 주세요.' : [409,422].includes(response.status) ? '다른 곳에서 목록이 변경되었습니다. 새로 로그인한 뒤 다시 시도해 주세요.' : 'GitHub 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+    const message = response.status >= 500 ? 'GitHub에서 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' : response.status === 401 ? '토큰이 만료되었거나 올바르지 않습니다.' : response.status === 403 ? '저장소의 Contents 읽기·쓰기 권한을 확인해 주세요.' : response.status === 404 ? '저장소를 찾을 수 없습니다. 토큰의 저장소 접근 권한을 확인해 주세요.' : [409,422].includes(response.status) ? '다른 곳에서 목록이 변경되었습니다. 새로 로그인한 뒤 다시 시도해 주세요.' : 'GitHub 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.';
     const error = new Error(message); error.status = response.status; throw error;
   }
   return response.status === 204 ? null : response.json();

@@ -27,10 +27,14 @@ test('GitHub Pages /vibe/ 경로에서 화면·목록·필터·관리자 안내�
     assert.equal(await page.title(), '3색 바이브코딩');
     assert.match(await page.locator('link[rel=stylesheet]').getAttribute('href'), /^\.\/public\//);
     await page.locator('.admin-link').click();
-    assert.equal(page.url(),url+'admin/');
+    assert.equal(page.url(),url+'manage.html');
     await page.locator('[name=token]').waitFor();
     assert.equal(await page.locator('[name=password]').count(),0);
     await page.getByRole('link',{name:'← 공개 페이지로 돌아가기'}).click();
+    assert.equal(page.url(),url);
+    await page.goto(url+'admin/');await page.locator('[name=token]').waitFor();
+    await page.getByRole('link',{name:'← 공개 페이지로 돌아가기'}).click();
+    assert.equal(page.url(),url);
     await page.route('**/content/apps.json', route => route.fulfill({json:[
       {id:'fixture-1',name:'수업 도구',description:'학습 자료',category:'class',url:'https://example.com/',visible:true,position:1,primary_label:'학생용',links:[{label:'교사용 설정',url:'https://example.com/teacher'}]},
       {id:'fixture-2',name:'업무 도구',description:'일정',category:'work',url:'https://example.org/',visible:true,position:0},

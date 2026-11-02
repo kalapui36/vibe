@@ -33,7 +33,7 @@ test('Pages 관리자가 GitHub Contents API로 등록·수정·정렬·썸네�
     const base=`http://127.0.0.1:${server.address().port}/vibe/`;
     await page.route(base+'content/apps.json',route=>route.fulfill({json:rows}));
     await page.route(base+'content/thumbnails/*',route=>route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=','base64')}));
-    await page.goto(base+'admin/');
+    await page.goto(base+'manage.html');
     await page.locator('[name=token]').fill('test-token-not-a-real-credential');
     await page.locator('#login-form button').click();await page.locator('#add-app').waitFor();
     await page.locator('#add-app').click();
