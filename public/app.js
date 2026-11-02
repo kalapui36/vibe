@@ -26,3 +26,8 @@ async function load() {
   catch { results.innerHTML='<div class="empty-state"><h3>목록을 불러오지 못했습니다.</h3><p>연결을 확인한 뒤 다시 시도해 주세요.</p><button class="button" id="retry">다시 시도</button></div>'; document.querySelector('#retry').onclick=load; }
 }
 load();
+
+for (const button of document.querySelectorAll('[data-filter]')) button.addEventListener('click', () => {
+  document.querySelector(`.tab[data-category="${button.dataset.filter}"]`).click();
+  document.querySelector('.collection').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+});
