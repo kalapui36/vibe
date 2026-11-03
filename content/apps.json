@@ -70,5 +70,21 @@
     "capture_status": "pending",
     "capture_requested_at": "2026-11-03T06:01:30.577Z",
     "created_at": "2026-11-03T06:01:30.578Z"
+  },
+  {
+    "name": "별빛 탐사선",
+    "description": "초등학교 4학년 과학 '태양계와 별' 단원을 직접 탐사하며 배우는 3D 우주 탐사 앱입니다. 실제 사진으로 만든 행성에 날아가 착륙해 보고, 행성 크기를 비교하고, 밤하늘의 별을 이어 북두칠성과 북극성을 찾아볼 수 있습니다. 관찰한 내용은 나만의 탐사 도감에 적고, 결과는 선생님께 자동으로 전달됩니다.",
+    "url": "https://poguni.github.io/starvoyager/",
+    "category": "class",
+    "visible": true,
+    "primary_label": "",
+    "links": [],
+    "id": "80ea6695-fd23-4445-b6ca-0e546ab0ac54",
+    "position": 4,
+    "thumbnail": null,
+    "capture": null,
+    "capture_status": "pending",
+    "capture_requested_at": "2026-11-03T06:06:22.125Z",
+    "created_at": "2026-11-03T06:06:22.125Z"
   }
 ]
