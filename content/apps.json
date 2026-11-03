@@ -54,5 +54,21 @@
       }
     ],
     "capture_error": null
+  },
+  {
+    "name": "우리 반 가상 미술관",
+    "description": "초등학교 미술 수업에서 학생들의 작품을 사진으로 업로드하면 3D 가상 미술관으로 자동 전시되는 웹 앱입니다. 1인칭 시점으로 전시실을 걸어 다니며 작품을 감상하고 좋아요·댓글을 남길 수 있으며, QR코드로 손쉽게 접속하고 PC·모바일 모두에서 자연스럽게 조작할 수 있도록 설계했습니다. 교사는 업로드부터 관리, 감상 결과 리포트 다운로드까지 별도 프로그램 설치 없이 처리할 수 있습니다.",
+    "url": "https://poguni.github.io/class-virtual-gallery/",
+    "category": "class",
+    "visible": true,
+    "primary_label": "",
+    "links": [],
+    "id": "e5fa2af7-9cb8-46bb-bdf7-3d04b1fe93e5",
+    "position": 3,
+    "thumbnail": null,
+    "capture": null,
+    "capture_status": "pending",
+    "capture_requested_at": "2026-11-03T06:01:30.577Z",
+    "created_at": "2026-11-03T06:01:30.578Z"
   }
 ]
