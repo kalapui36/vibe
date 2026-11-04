@@ -1,6 +1,7 @@
 import { requestJson } from './request.js';
 // Transitional login only. The dispatcher disables this path once auth_url is configured.
 import { webAddress, relatedLinks, primaryLabel, creationId, sameEntryMetadata } from './catalog.js';
+import { validateHtml, htmlLocation } from './html-file.js';
 // Credentials stay in memory for this tab. No localStorage, public file, or URL tokens.
 let token = '';
 let config;
@@ -18,11 +19,12 @@ async function settings() {
   }
   return config;
 }
-async function github(path, { method = 'GET', body } = {}) {
+async function github(path, { method = 'GET', body, allowMissing=false } = {}) {
   const { owner, repo } = await settings();
   const {response,data} = await requestJson(path==='/user'?'https://api.github.com/user':`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}${path}`, {
     method, cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28', ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined,
   });
+  if(response.status===404&&allowMissing)return null;
   if (!response.ok) {
     if(response.status===429||(response.status===403&&(response.headers.get('x-ratelimit-remaining')==='0'||response.headers.get('retry-after'))))throw Object.assign(new Error('GitHub 요청 한도에 도달했습니다. 잠시 기다린 뒤 다시 시도해 주세요.'),{status:429,code:'rate_limited'});
     if (response.status === 401) { token = ''; snapshot = null; }
@@ -64,8 +66,13 @@ function validated(body) {
   if (!name || name.length > 80 || description.length > 240 || !categories.has(body.category)) throw new Error('이름, 설명, 분류를 확인해 주세요.');
   return { name, description, url:webAddress(url.href), category:body.category, visible:body.visible !== false, primary_label:primaryLabel(body.primary_label), links:relatedLinks(body.links) };
 }
+async function uploadHtml(file,upload){
+  const {branch}=await settings(),existing=await github(`/contents/${file}?ref=${encodeURIComponent(branch)}`,{allowMissing:true}),content=encode(upload.text);
+  if(existing){if(existing.content?.replace(/\s/g,'')===content)return;throw new Error('저장된 HTML 파일을 확인해 주세요.');}
+  await github(`/contents/${file}`,{method:'PUT',body:{message:'Upload web app HTML',content,branch}});
+}
 export async function pagesApi(path, options = {}) {
-  const method = options.method || 'GET', body = options.body;
+  const method = options.method || 'GET';let body=options.body;
   if (path === '/api/session') return { authenticated:!!token, configured:true, mode:'github' };
   if (path === '/api/login') {
     token = String(body?.token || '').trim();
@@ -90,19 +97,23 @@ export async function pagesApi(path, options = {}) {
     await save(rows,'Update web app order');return {ok:true};
   }
   if (path === '/api/admin/apps' && method === 'POST') {
-    const value=validated(body);
-    const requestId=creationId(body.request_id),existing=requestId&&rows.find(row=>row.id===requestId);
+    const requestId=creationId(body.request_id),id=requestId||crypto.randomUUID(),upload=body.html===undefined?null:validateHtml(body.html),html=upload?await htmlLocation(id,upload,baseUrl):null;
+    const value=validated({...body,...(html||{})});
+    const existing=requestId&&rows.find(row=>row.id===requestId);
     if(existing){if(!sameEntryMetadata(existing,value))throw Object.assign(new Error('이미 저장된 등록 요청입니다. 최신 내용을 불러와 확인해 주세요.'),{status:409});return decorate(existing);}
-    const row={...value,id:requestId||crypto.randomUUID(),position:Math.max(-1,...rows.map(row=>row.position))+1,thumbnail:null,capture:null,capture_status:'pending',capture_requested_at:new Date().toISOString(),created_at:new Date().toISOString()};
+    const row={...value,...(html||{}),id,position:Math.max(-1,...rows.map(row=>row.position))+1,thumbnail:null,capture:null,capture_status:'pending',capture_requested_at:new Date().toISOString(),created_at:new Date().toISOString()};
+    if(upload)await uploadHtml(html.html_path,upload);
     rows.push(row);await save(rows,'Add web app');return decorate(row);
   }
   const match=/^\/api\/admin\/apps\/([\w-]+)(?:\/(thumbnail|capture))?$/.exec(path);
   const row=match && rows.find(row=>row.id===match[1]);
   if (!row) throw new Error('웹앱을 찾을 수 없습니다.');
   if (!match[2] && method==='PUT') {
-    const value=validated({...row,...body});
+    const upload=body.html===undefined?null:validateHtml(body.html),html=upload?await htmlLocation(row.id,upload,baseUrl):null;
+    const value=validated({...row,...body,...(html||{})});
+    if(!html&&row.html_path&&row.url!==value.url)Object.assign(row,{html_path:null,html_filename:null,html_sha256:null});
     if(row.url!==value.url){row.capture=null;row.capture_status='pending';row.capture_error=null;row.capture_requested_at=new Date().toISOString();}
-    Object.assign(row,value);await save(rows,'Update web app');return {ok:true};
+    Object.assign(row,value,html||{});if(upload)await uploadHtml(html.html_path,upload);await save(rows,'Update web app');return {ok:true};
   }
   if (!match[2] && method==='DELETE') {await save(rows.filter(item=>item.id!==row.id),'Delete web app');return {ok:true};}
   if (match[2]==='capture') {row.capture_status='pending';row.capture_error=null;row.capture_requested_at=new Date().toISOString();await save(rows,'Refresh web app screenshot');return {ok:true};}

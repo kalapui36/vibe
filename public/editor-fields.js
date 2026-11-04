@@ -25,6 +25,7 @@ export function validationMessage(control) {
 export function validateEditor(form) {
   let first;
   for(const control of form.querySelectorAll('input:not([type=radio]):not([type=checkbox]):not([type=file]),textarea')) {
+    if(control.disabled)continue;
     const message=validationMessage(control);fieldError(control,message);if(message&&!first)first=control;
   }
   if(first){first.focus({preventScroll:true});first.scrollIntoView({block:'center',behavior:'instant'});}

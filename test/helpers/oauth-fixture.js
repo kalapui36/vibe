@@ -2,7 +2,7 @@ import http from 'node:http';
 import { createHash } from 'node:crypto';
 import { createOAuthApp, readConfig } from '../../lib/oauth-app.js';
 export async function oauthFixture({secure=false,configured=true}={}){
-  const state={rows:[],revision:'catalog-0',configRevision:'config-0',publicConfig:{owner:'kalapui36',repo:'vibe',branch:'main'},permission:true,apiDown:false,revoked:new Set(),calls:[],uploads:[],exchange:[],exchanges:0};
+  const state={rows:[],revision:'catalog-0',configRevision:'config-0',publicConfig:{owner:'kalapui36',repo:'vibe',branch:'main'},permission:true,apiDown:false,revoked:new Set(),calls:[],uploads:[],htmlFiles:new Map(),exchange:[],exchanges:0};
   const server=http.createServer();
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const base=`http://127.0.0.1:${server.address().port}`;
@@ -36,6 +36,7 @@ export async function oauthFixture({secure=false,configured=true}={}){
     if(path==='content/apps.json'){
       if(method==='GET')return reply({sha:state.revision,encoding:'base64',content:Buffer.from(JSON.stringify(state.rows)).toString('base64')});
       if(method==='PUT'){
+        if(state.beforeCatalogWrite){const hook=state.beforeCatalogWrite;state.beforeCatalogWrite=null;hook();}
         if(payload.sha!==state.revision)return reply({},409);
         state.rows=JSON.parse(Buffer.from(payload.content,'base64').toString('utf8'));state.revision=`catalog-${Number(state.revision.split('-')[1])+1}`;
         return reply({content:{sha:state.revision}});
@@ -47,6 +48,17 @@ export async function oauthFixture({secure=false,configured=true}={}){
       state.publicConfig=JSON.parse(Buffer.from(payload.content,'base64').toString('utf8'));state.configRevision='config-'+Date.now();return reply({content:{sha:state.configRevision}});
     }
     if(path.startsWith('content/thumbnails/')&&method==='PUT'){state.uploads.push(payload);return reply({content:{sha:'image-1'}});}
+    if(path.startsWith('content/webapps/')){
+      const existing=state.htmlFiles.get(path);
+      if(method==='GET')return existing?reply({sha:existing.sha,encoding:'base64',content:existing.content}):reply({},404);
+      if(method==='PUT'){
+        if(state.htmlFailure)return reply({},503);
+        if(existing)return reply({},422);
+        const file={sha:`html-${state.htmlFiles.size}`,content:payload.content};state.htmlFiles.set(path,file);
+        if(state.lostHtmlResponse){state.lostHtmlResponse=false;return reply({},503);}
+        return reply({content:{sha:file.sha}});
+      }
+    }
     throw new Error('Unexpected method');
   };
   server.on('request',createOAuthApp(config,{fetcher}));

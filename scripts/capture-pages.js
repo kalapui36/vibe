@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { capturePage } from '../screenshot.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const path = new URL('../content/apps.json', import.meta.url);
 const rows = JSON.parse(await readFile(path, 'utf8'));
@@ -10,7 +11,14 @@ for (const row of rows) {
   if (!/^[a-zA-Z0-9-]+$/.test(row.id)) throw new Error('Invalid app id');
   const file = `content/thumbnails/${row.id}-${Date.now()}.jpg`;
   try {
-    await capturePage(row.url, fileURLToPath(new URL(`../${file}`, import.meta.url)));
+    for(let attempt=0;;attempt++){
+      try{await capturePage(row.url, fileURLToPath(new URL(`../${file}`, import.meta.url)));break;}
+      catch(error){
+        // A newly uploaded file may be waiting for the Pages deployment.
+        if(!row.html_path||error.httpStatus!==404||attempt>=3)throw error;
+        await delay(15000);
+      }
+    }
     row.capture = file;
     row.capture_status = 'ready';
     row.capture_source = 'live';

@@ -1,5 +1,6 @@
 import { relatedLinks, primaryLabel } from './catalog.js';
 import { fieldError, validationMessage, validateEditor, clearFieldErrors } from './editor-fields.js';
+import { validateHtml, MAX_HTML_BYTES } from './html-file.js';
 import { api, escape, categories, thumbnail, bindImageErrors, isPages, captureMessages } from './shared.js';
 if (isPages && location.protocol === 'http:' && !['localhost','127.0.0.1','[::1]'].includes(location.hostname)) {
   const secureUrl = new URL(location.href);
@@ -10,8 +11,10 @@ const homeUrl = isPages ? new URL('../', import.meta.url).href : '/';
 const main = document.querySelector('#admin-main'), editor = document.querySelector('#editor'), form = document.querySelector('#app-form');
 let apps=[], editing=null, imageChange=undefined, selectedFile=null, dragging=null, busy=false, toastTimer, polling, draftId=null, imageLoading=false, imageInvalid=false, imageReadVersion=0, activeReader;
 let baseline='';
+let htmlChange=null,htmlLoading=false,htmlInvalid=false,htmlReadVersion=0;
+const htmlMode=()=>form.elements.source_type.value==='html';
 function editorSnapshot(){
-  return JSON.stringify({fields:[...form.querySelectorAll('input:not([type=file]),textarea')].map(input=>[input.name||input.className,input.type==='checkbox'?input.checked:input.type==='radio'?input.checked:input.value]),image:imageChange===undefined?'unchanged':imageChange===null?'auto':`${selectedFile?.name}:${selectedFile?.size}:${selectedFile?.lastModified}`,file:document.querySelector('#thumbnail-file').value});
+  return JSON.stringify({fields:[...form.querySelectorAll('input:not([type=file]),textarea')].map(input=>[input.name||input.className,input.type==='checkbox'?input.checked:input.type==='radio'?input.checked:input.value]),image:imageChange===undefined?'unchanged':imageChange===null?'auto':`${selectedFile?.name}:${selectedFile?.size}:${selectedFile?.lastModified}`,file:document.querySelector('#thumbnail-file').value,imagePending:imageLoading||imageInvalid?imageReadVersion:null,html:htmlMode()?[htmlChange?.version,htmlLoading||htmlInvalid?htmlReadVersion:null]:null});
 }
 function hasUnsavedChanges(){return editor.open&&baseline!==editorSnapshot();}
 function requestClose(){if(!busy&&(!hasUnsavedChanges()||confirm('저장하지 않은 내용이 있습니다. 닫을까요?')))editor.close();}
@@ -23,13 +26,16 @@ function syncNavigationProtection(){
 for(const event of ['input','change','click'])form.addEventListener(event,syncNavigationProtection);
 editor.addEventListener('close',syncNavigationProtection);
 function syncSaveButton(){
-  const save=document.querySelector('#save-app');save.disabled=busy||imageLoading||imageInvalid;
-  save.textContent=busy?'저장 중…':imageLoading?'이미지 확인 중…':'저장';save.setAttribute('aria-busy',String(busy||imageLoading));
+  const reading=imageLoading||(htmlMode()&&htmlLoading);
+  const save=document.querySelector('#save-app');save.disabled=busy||reading||imageInvalid||(htmlMode()&&htmlInvalid);
+  save.textContent=busy?'저장 중…':imageLoading?'이미지 확인 중…':reading?'HTML 확인 중…':'저장';save.setAttribute('aria-busy',String(busy||reading));
   document.querySelector('#image-read-status').textContent=imageLoading?'이미지를 불러오는 중입니다.':'';
   document.querySelector('#image-preview').setAttribute('aria-busy',String(imageLoading));
+  for(const zone of document.querySelectorAll('.upload-dropzone'))zone.setAttribute('aria-disabled',String(busy));
 }
 function imageError(message=''){
   const el=document.querySelector('#image-error');el.textContent=message;el.hidden=!message;
+  document.querySelector('#image-dropzone').setAttribute('aria-invalid',String(!!message));
   const input=document.querySelector('#thumbnail-file');input.setAttribute('aria-describedby','image-error image-read-status');
   if(message)input.setAttribute('aria-invalid','true');else input.removeAttribute('aria-invalid');
 }
@@ -60,12 +66,12 @@ function showLogin(session=sessionInfo,message='') {
       const url=new URL(session.login_url,location.href);
       if(url.protocol==='https:'||(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))destination=url.href;
     }
-    main.innerHTML=`<section class="login-panel oauth-panel"><span class="eyebrow muted">관리자</span><h1>GitHub로 로그인</h1><p>kalapui36 계정만 웹앱을 수정할 수 있습니다.</p>${session.configured&&destination?`<a class="button primary oauth-button" href="${escape(destination)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1-4-2-6-2m12 4v-3.8c0-1 .1-1.6-.5-2.2 3.2-.4 6.5-1.5 6.5-7a5.5 5.5 0 0 0-1.5-3.8c.2-1 .2-2-.1-3.2 0 0-1.2-.4-3.9 1.5a13 13 0 0 0-7 0C5.3.6 4.1 1 4.1 1c-.3 1.2-.3 2.2-.1 3.2A5.5 5.5 0 0 0 2.5 8c0 5.5 3.3 6.6 6.5 7-.6.6-.6 1.4-.5 2.2V21"/></svg>GitHub로 로그인<span aria-hidden="true">↗</span></a><p class="field-hint oauth-hint">처음에는 GitHub에서 권한 승인이 필요합니다.<br>다른 기기에서도 GitHub 계정으로 로그인할 수 있습니다.</p>`:`<div class="setup-notice"><b>GitHub 로그인 초기 연결이 필요합니다.</b><p>관리자 서버 배포와 GitHub 인증 앱 설정을 마치면 로그인 버튼이 활성화됩니다.</p>${session.setup_url?`<a class="button secondary" href="${escape(session.setup_url)}" target="_blank" rel="noopener noreferrer">초기 연결 설정 열기 ↗</a>`:''}</div>`}<p class="form-error" role="alert">${escape(message)}</p><a class="back-link" href="${homeUrl}">← 공개 페이지로 돌아가기</a></section>`;
+    main.innerHTML=`<section class="login-panel oauth-panel"><h1>관리자 로그인</h1>${session.configured&&destination?`<a class="button primary oauth-button" href="${escape(destination)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1-4-2-6-2m12 4v-3.8c0-1 .1-1.6-.5-2.2 3.2-.4 6.5-1.5 6.5-7a5.5 5.5 0 0 0-1.5-3.8c.2-1 .2-2-.1-3.2 0 0-1.2-.4-3.9 1.5a13 13 0 0 0-7 0C5.3.6 4.1 1 4.1 1c-.3 1.2-.3 2.2-.1 3.2A5.5 5.5 0 0 0 2.5 8c0 5.5 3.3 6.6 6.5 7-.6.6-.6 1.4-.5 2.2V21"/></svg>GitHub로 로그인<span aria-hidden="true">↗</span></a>`:`<div class="setup-notice"><b>GitHub 로그인 초기 연결이 필요합니다.</b><p>관리자 서버 배포와 GitHub 인증 앱 설정을 마치면 로그인 버튼이 활성화됩니다.</p>${session.setup_url?`<a class="button secondary" href="${escape(session.setup_url)}" target="_blank" rel="noopener noreferrer">초기 연결 설정 열기 ↗</a>`:''}</div>`}<p class="form-error" role="alert">${escape(message)}</p><a class="back-link" href="${homeUrl}">← 공개 페이지로 돌아가기</a></section>`;
     return;
   }
   const temporary=session.mode==='token';
   const field=temporary?'<label class="field">GitHub 토큰<input name="token" type="password" autocomplete="off" required placeholder="기존 토큰"></label>':'<label class="field">비밀번호<input name="password" type="password" autocomplete="current-password" required placeholder="관리자 비밀번호"></label>';
-  main.innerHTML=`<section class="login-panel"><span class="eyebrow muted">관리자</span><h1>관리자 로그인</h1><p>웹앱과 공개 목록을 관리합니다.</p>${temporary?`<div class="setup-notice"><b>GitHub 로그인 초기 연결이 필요합니다.</b><p>연결 전까지 기존 토큰으로 관리할 수 있습니다. 연결 후에는 토큰 입력 없이 GitHub로 로그인합니다.</p><a href="${escape(session.setup_url)}" target="_blank" rel="noopener noreferrer">초기 연결 설정 열기 ↗</a></div>`:''}<form id="login-form">${field}<p id="login-error" class="form-error" role="alert">${escape(message)}</p><button class="button primary" type="submit">로그인 <span>→</span></button></form><a class="back-link" href="${homeUrl}">← 공개 페이지로 돌아가기</a></section>`;
+  main.innerHTML=`<section class="login-panel"><h1>관리자 로그인</h1>${temporary?`<div class="setup-notice"><b>GitHub 로그인 초기 연결이 필요합니다.</b><p>연결 전까지 기존 토큰으로 관리할 수 있습니다. 연결 후에는 토큰 입력 없이 GitHub로 로그인합니다.</p><a href="${escape(session.setup_url)}" target="_blank" rel="noopener noreferrer">초기 연결 설정 열기 ↗</a></div>`:''}<form id="login-form">${field}<p id="login-error" class="form-error" role="alert">${escape(message)}</p><button class="button primary" type="submit">로그인 <span>→</span></button></form><a class="back-link" href="${homeUrl}">← 공개 페이지로 돌아가기</a></section>`;
   document.querySelector('#login-form').addEventListener('submit',async event=>{
     event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;
     try{await api('/api/login',{method:'POST',body:temporary?{token:event.target.elements.token.value}:{password:event.target.elements.password.value}});await startDashboard();}
@@ -125,12 +131,46 @@ async function rowAction(id,action) {
 }
 function openEditor(app=null) {
   cancelImageRead();editing=app;draftId=app?.id||crypto.randomUUID();imageChange=undefined;selectedFile=null;form.reset();
+  htmlReadVersion++;htmlChange=null;htmlLoading=false;htmlInvalid=false;document.querySelector('#html-file').value='';htmlError();
+  form.elements.source_type.value=app?.html_path?'html':'url';
   document.querySelector('#editor-title').textContent=app?'웹앱 수정':'웹앱 추가';
   form.elements.primary_label.value=app?.primary_label||'';document.querySelector('#related-links').replaceChildren();for(const link of app?.links||[])addLinkRow(link);updateLinkControls();
   form.elements.name.value=app?.name||'';form.elements.url.value=app?.url||'';form.elements.description.value=app?.description||'';form.elements.category.value=app?.category||'class';form.elements.visible.checked=app?.visible??true;
   clearFieldErrors(form);imageError();document.querySelector('#thumbnail-file').value='';
-  document.querySelector('#editor-error').textContent='';document.querySelector('#reload-editor').hidden=true;syncSaveButton();preview();baseline=editorSnapshot();if(!editor.open)editor.showModal();
+  document.querySelector('#editor-error').textContent='';document.querySelector('#reload-editor').hidden=true;syncSource();preview();baseline=editorSnapshot();if(!editor.open)editor.showModal();
 }
+function htmlError(message=''){
+  const error=document.querySelector('#html-error');error.textContent=message;error.hidden=!message;
+  document.querySelector('#html-dropzone').setAttribute('aria-invalid',String(!!message));
+}
+function syncSource(){
+  document.querySelector('#html-field').hidden=!htmlMode();document.querySelector('#url-field').hidden=htmlMode();
+  form.elements.url.disabled=htmlMode();form.elements.url.required=!htmlMode();
+  document.querySelector('#html-status').textContent=htmlLoading?'HTML 파일을 읽는 중입니다.':htmlChange?`${htmlChange.filename} · 저장하면 반영됩니다.`:editing?.html_filename?`등록된 파일: ${editing.html_filename}`:'선택한 파일이 없습니다.';
+  document.querySelector('#html-dropzone').setAttribute('aria-busy',String(htmlLoading));
+  syncSaveButton();
+}
+for(const radio of form.elements.source_type)radio.addEventListener('change',syncSource);
+async function readHtmlFiles(files){
+  if(busy||!files.length)return;
+  const version=++htmlReadVersion;htmlLoading=false;htmlInvalid=false;htmlError();
+  const file=files[0];
+  try{
+    if(files.length!==1)throw new Error('HTML 파일은 한 번에 1개만 올려 주세요.');
+    if(!/\.html?$/i.test(file.name))throw new Error('HTML 또는 HTM 파일을 선택해 주세요.');
+    if(file.size>MAX_HTML_BYTES)throw new Error('HTML 파일은 2MB 이하로 올려 주세요.');
+    htmlLoading=true;syncSource();syncNavigationProtection();
+    const text=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());
+    const upload=validateHtml({filename:file.name,text});
+    if(version!==htmlReadVersion||!editor.open)return;
+    htmlChange={...upload,version};
+    if(!form.elements.name.value.trim())form.elements.name.value=file.name.replace(/\.html?$/i,'').slice(0,80);
+  }catch(error){
+    if(version!==htmlReadVersion||!editor.open)return;
+    htmlInvalid=true;htmlError(error instanceof TypeError?'UTF-8로 저장된 HTML 파일을 선택해 주세요.':error.message);
+  }finally{if(version===htmlReadVersion&&editor.open){htmlLoading=false;syncSource();syncNavigationProtection();}}
+}
+document.querySelector('#html-file').addEventListener('change',event=>readHtmlFiles(event.target.files));
 function preview() {
   const raw=imageChange===null?editing?.capture:imageChange||editing?.image;
   const source=raw&&isPages?new URL(raw,new URL('../',import.meta.url)).href:raw;
@@ -152,10 +192,12 @@ function addLinkRow(link={}) {
 }
 document.querySelector('#add-link').onclick=()=>{addLinkRow();document.querySelector('.related-row:last-child .link-label')?.focus();};
 document.querySelector('#choose-thumbnail').onclick=()=>document.querySelector('#thumbnail-file').click();
-document.querySelector('#thumbnail-file').addEventListener('change',event=>{
-  cancelImageRead();imageError();const file=event.target.files[0];if(!file)return;
-  if(file.size>4*1024*1024||!['image/png','image/jpeg','image/webp'].includes(file.type)){imageInvalid=true;imageError('JPG, PNG, WebP 파일을 4MB 이하로 올려 주세요.');event.target.value='';syncSaveButton();return;}
-  const version=imageReadVersion,reader=new FileReader();activeReader=reader;imageLoading=true;syncSaveButton();
+function readImageFiles(files){
+  if(busy||!files.length)return;
+  cancelImageRead();imageError();const file=files[0];
+  const type=file.type||({png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp'})[file.name.split('.').pop().toLowerCase()];
+  if(files.length!==1||file.size>4*1024*1024||!['image/png','image/jpeg','image/webp'].includes(type)){imageInvalid=true;imageError(files.length!==1?'썸네일은 한 번에 1개만 올려 주세요.':'JPG, PNG, WebP 파일을 4MB 이하로 올려 주세요.');document.querySelector('#thumbnail-file').value='';syncSaveButton();syncNavigationProtection();return;}
+  const version=imageReadVersion,reader=new FileReader();activeReader=reader;imageLoading=true;syncSaveButton();syncNavigationProtection();
   const failed=()=>{if(version!==imageReadVersion||!editor.open)return;imageLoading=false;imageInvalid=true;activeReader=null;imageError('이미지를 읽지 못했습니다. 파일을 다시 선택하거나 자동 썸네일을 사용해 주세요.');syncSaveButton();};
   reader.onerror=failed;
   reader.onload=async()=>{
@@ -163,12 +205,25 @@ document.querySelector('#thumbnail-file').addEventListener('change',event=>{
     try{const img=new Image();img.src=reader.result;await img.decode();}
     catch{failed();return;}
     if(version!==imageReadVersion||!editor.open)return;
-    imageChange=reader.result;selectedFile=file;imageLoading=false;activeReader=null;document.querySelector('#editor-error').textContent='';syncSaveButton();preview();
+    imageChange=reader.result.replace(/^data:[^;]*;base64,/,`data:${type};base64,`);selectedFile=file;imageLoading=false;activeReader=null;document.querySelector('#editor-error').textContent='';syncSaveButton();preview();syncNavigationProtection();
   };
   reader.readAsDataURL(file);
+}
+document.querySelector('#thumbnail-file').addEventListener('change',event=>readImageFiles(event.target.files));
+for(const [zoneId,inputId,read] of [['html-dropzone','html-file',readHtmlFiles],['image-dropzone','thumbnail-file',readImageFiles]]){
+  const zone=document.getElementById(zoneId),input=document.getElementById(inputId);
+  zone.addEventListener('click',()=>{if(!busy)input.click();});
+  zone.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();if(!busy)input.click();}});
+  for(const type of ['dragenter','dragover'])zone.addEventListener(type,event=>{if(!event.dataTransfer.types.includes('Files'))return;event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect=busy?'none':'copy';if(!busy)zone.classList.add('drag-over');});
+  zone.addEventListener('dragleave',event=>{if(!zone.contains(event.relatedTarget))zone.classList.remove('drag-over');});
+  zone.addEventListener('drop',event=>{event.preventDefault();event.stopPropagation();zone.classList.remove('drag-over');if(!busy)read(event.dataTransfer.files);});
+}
+for(const type of ['dragover','drop'])document.addEventListener(type,event=>{
+  if(event.dataTransfer?.types.includes('Files')){event.preventDefault();if(type==='drop'&&editor.open)toast('파일을 업로드 영역에 놓아 주세요.');}
 });
 document.querySelector('#reset-thumbnail').onclick=()=>{cancelImageRead();imageError();imageChange=null;selectedFile=null;document.querySelector('#thumbnail-file').value='';document.querySelector('#editor-error').textContent='';preview();};
 editor.addEventListener('close',cancelImageRead);
+editor.addEventListener('close',()=>{htmlReadVersion++;htmlLoading=false;htmlInvalid=false;document.querySelectorAll('.drag-over').forEach(zone=>zone.classList.remove('drag-over'));});
 document.querySelector('#reload-editor').onclick=async()=>{
   if(busy)return;
   const wasExisting=!!editing?.id,targetId=editing?.id||draftId;
@@ -184,7 +239,7 @@ document.querySelector('#reload-editor').onclick=async()=>{
 };
 for(const id of ['close-editor','cancel-editor']) document.querySelector(`#${id}`).onclick=requestClose;
 editor.addEventListener('cancel',event=>{event.preventDefault();requestClose();});
-form.addEventListener('focusout',event=>{if(event.target.matches('input:not([type=radio]):not([type=checkbox]):not([type=file]),textarea'))fieldError(event.target,validationMessage(event.target));});
+form.addEventListener('focusout',event=>{if(!event.target.disabled&&event.target.matches('input:not([type=radio]):not([type=checkbox]):not([type=file]),textarea'))fieldError(event.target,validationMessage(event.target));});
 form.addEventListener('input',event=>{if(event.target.hasAttribute('aria-invalid'))fieldError(event.target,validationMessage(event.target));});
 function resizeEditor(){
   const viewport=window.visualViewport;
@@ -193,15 +248,23 @@ function resizeEditor(){
 }
 window.visualViewport?.addEventListener('resize',resizeEditor);window.visualViewport?.addEventListener('scroll',resizeEditor);window.addEventListener('resize',resizeEditor);resizeEditor();
 form.addEventListener('submit',async event=>{
-  event.preventDefault();if(busy||imageLoading||imageInvalid||!validateEditor(form))return;setBusy(true);document.querySelector('#editor-error').textContent='';
+  event.preventDefault();if(busy||imageLoading||imageInvalid||(htmlMode()&&(htmlLoading||htmlInvalid)))return;
+  if(htmlMode()&&!htmlChange&&!editing?.html_path){htmlError('HTML 파일을 선택해 주세요.');document.querySelector('#html-dropzone').focus();return;}
+  if(!validateEditor(form))return;
+  setBusy(true);document.querySelector('#editor-error').textContent='';
   try {
     const payload={name:form.elements.name.value,url:form.elements.url.value,description:form.elements.description.value,category:form.elements.category.value,visible:form.elements.visible.checked,primary_label:primaryLabel(form.elements.primary_label.value),links:relatedLinks([...document.querySelectorAll('.related-row')].map(row=>({label:row.querySelector('.link-label').value,url:row.querySelector('.link-url').value})))};
+    if(htmlMode()&&htmlChange)payload.html={filename:htmlChange.filename,text:htmlChange.text};
     let id=editing?.id;
     if(id) await api(`/api/admin/apps/${id}`,{method:'PUT',body:payload});
-    else {const created=await api('/api/admin/apps',{method:'POST',body:{...payload,request_id:draftId}});id=created.id;editing=created;}
+    else {const created=await api('/api/admin/apps',{method:'POST',body:{...payload,request_id:draftId}});id=created.id;editing=created;form.elements.url.value=created.url;}
     if(imageChange!==undefined) await api(`/api/admin/apps/${id}/thumbnail`,{method:'PUT',body:{image:imageChange}});
-    editor.close();await refresh();toast(isPages?'저장했습니다. 공개 페이지에 반영되기까지 잠시 걸릴 수 있습니다.':'저장했습니다.');
-  }catch(error){document.querySelector('#editor-error').textContent=errorMessage(error);if(error.status===409||error.code==='conflict')document.querySelector('#reload-editor').hidden=false;}
+    editor.close();await refresh();toast(isPages||sessionInfo.mode==='oauth'?'저장했습니다. 공개 페이지에 반영되기까지 잠시 걸릴 수 있습니다.':'저장했습니다.');
+  }catch(error){
+    if(error.code==='invalid_html'){htmlError(error.message);document.querySelector('#html-dropzone').focus();}
+    else document.querySelector('#editor-error').textContent=errorMessage(error);
+    if(error.status===409||error.code==='conflict')document.querySelector('#reload-editor').hidden=false;
+  }
   finally{setBusy(false);}
 });
 let booting=false;

@@ -1,7 +1,8 @@
-import { relatedLinks, primaryLabel, creationId, sameEntryMetadata } from './public/catalog.js';
+import { webAddress, relatedLinks, primaryLabel, creationId, sameEntryMetadata } from './public/catalog.js';
+import { validateHtml, htmlLocation } from './public/html-file.js';
 import express from 'express';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, dataDir, getPassword, setPassword, verifyPassword } from './store.js';
@@ -66,23 +67,35 @@ app.post('/api/logout', (req, res) => {
 function serialize(row) { return { ...row, visible: !!row.visible, links: JSON.parse(row.links || '[]'), image: row.thumbnail || row.capture || null }; }
 app.get('/api/apps', (req, res) => res.json(db.prepare('SELECT * FROM apps WHERE visible=1 ORDER BY position, created_at').all().map(serialize)));
 app.get('/api/admin/apps', admin, (req, res) => res.json(db.prepare('SELECT * FROM apps ORDER BY position, created_at').all().map(serialize)));
-async function validate(body) {
+async function htmlSource(req,id){
+  if(req.body?.html===undefined)return null;
+  const upload=validateHtml(req.body.html),base=(process.env.APP_ORIGIN||`${req.protocol}://${req.get('host')}`)+'/';
+  return {upload,metadata:await htmlLocation(id,upload,base,'uploaded')};
+}
+async function saveHtml(source){
+  if(!source)return;
+  const path=resolve(dataDir,source.metadata.html_path);await mkdir(dirname(path),{recursive:true});
+  try{await writeFile(path,source.upload.text,{encoding:'utf8',flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}
+}
+async function validate(body,{hosted=false}={}) {
   const name = String(body.name || '').trim();
   const description = String(body.description || '').trim();
   if (!name || name.length > 80 || description.length > 240) throw new Error('이름은 1~80자, 설명은 240자 이내로 입력해 주세요.');
   if (!['class', 'mind', 'work'].includes(body.category)) throw new Error('분류를 선택해 주세요.');
-  return { name, description, url: normalizeUrl(body.url), category: body.category, visible: body.visible === false ? 0 : 1, primary_label: primaryLabel(body.primary_label), links:relatedLinks(body.links).map(link=>({...link,url:normalizeUrl(link.url)})) };
+  return { name, description, url: hosted?webAddress(body.url):normalizeUrl(body.url), category: body.category, visible: body.visible === false ? 0 : 1, primary_label: primaryLabel(body.primary_label), links:relatedLinks(body.links).map(link=>({...link,url:normalizeUrl(link.url)})) };
 }
 app.post('/api/admin/apps', admin, async (req, res) => {
-  const value = await validate(req.body);
   const id = creationId(req.body.request_id)||randomUUID();
+  const source=await htmlSource(req,id),html=source?.metadata;
+  const value = await validate({...req.body,...(html||{})},{hosted:!!source});
   const existing=db.prepare('SELECT * FROM apps WHERE id=?').get(id);
   if(existing){
     if(!sameEntryMetadata(serialize(existing),value))return res.status(409).json({error:'이미 저장된 등록 요청입니다. 최신 내용을 불러와 확인해 주세요.',code:'conflict'});
     return res.json(serialize(existing));
   }
   const position = db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS position FROM apps').get().position;
-  db.prepare('INSERT INTO apps (id,name,url,description,category,visible,position,primary_label,links) VALUES (?,?,?,?,?,?,?,?,?)').run(id,value.name,value.url,value.description,value.category,value.visible,position,value.primary_label,JSON.stringify(value.links));
+  await saveHtml(source);
+  db.prepare('INSERT INTO apps (id,name,url,description,category,visible,position,primary_label,links,html_path,html_filename,html_sha256) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(id,value.name,value.url,value.description,value.category,value.visible,position,value.primary_label,JSON.stringify(value.links),html?.html_path||null,html?.html_filename||null,html?.html_sha256||null);
   scheduleCapture(id); res.status(201).json(serialize(db.prepare('SELECT * FROM apps WHERE id=?').get(id)));
 });
 app.put('/api/admin/order', admin, (req, res) => {
@@ -97,8 +110,11 @@ app.put('/api/admin/order', admin, (req, res) => {
 app.put('/api/admin/apps/:id', admin, async (req, res) => {
   const old = db.prepare('SELECT * FROM apps WHERE id=?').get(req.params.id);
   if (!old) return res.status(404).json({ error: '웹앱을 찾을 수 없습니다.' });
-  const v = await validate({...serialize(old),...req.body});
-  db.prepare('UPDATE apps SET name=?,url=?,description=?,category=?,visible=?,primary_label=?,links=? WHERE id=?').run(v.name,v.url,v.description,v.category,v.visible,v.primary_label,JSON.stringify(v.links),old.id);
+  const source=await htmlSource(req,old.id),html=source?.metadata;
+  const v = await validate({...serialize(old),...req.body,...(html||{})},{hosted:!!source||!!old.html_path&&(req.body.url===undefined||req.body.url===old.url)});
+  const keep=html||old.url===v.url&&old;
+  await saveHtml(source);
+  db.prepare('UPDATE apps SET name=?,url=?,description=?,category=?,visible=?,primary_label=?,links=?,html_path=?,html_filename=?,html_sha256=? WHERE id=?').run(v.name,v.url,v.description,v.category,v.visible,v.primary_label,JSON.stringify(v.links),keep?.html_path||null,keep?.html_filename||null,keep?.html_sha256||null,old.id);
   if (old.url !== v.url) { db.prepare('UPDATE apps SET capture=NULL WHERE id=?').run(old.id); scheduleCapture(old.id); }
   res.json({ ok: true });
 });
@@ -124,6 +140,8 @@ app.put('/api/admin/apps/:id/thumbnail', admin, async (req,res) => {
   db.prepare('UPDATE apps SET thumbnail=? WHERE id=?').run(path,req.params.id); res.json({ ok:true });
 });
 app.use('/thumbnails', express.static(resolve(dataDir,'thumbnails'), { immutable: true, maxAge:'1y', dotfiles:'deny' }));
+// Uploaded programs run without the administrator origin in standalone mode.
+app.use('/uploaded',express.static(resolve(dataDir,'uploaded'),{immutable:true,maxAge:'1y',dotfiles:'deny',setHeaders:res=>res.setHeader('Content-Security-Policy',"sandbox allow-scripts allow-forms allow-modals allow-downloads; frame-ancestors 'none'")}));
 app.get('/admin', (req,res) => res.sendFile(resolve(root,'public/admin.html')));
 app.use(express.static(resolve(root,'public')));
 app.use((err,req,res,next) => {

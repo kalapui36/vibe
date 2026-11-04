@@ -70,7 +70,7 @@ export async function capturePage(url, output) {
     let response;
     try { response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
     catch (error) { throw stageError(error, 'navigation'); }
-    if (!response || response.status() >= 400) throw stageError(new Error('Page unavailable'), 'http');
+    if (!response || response.status() >= 400) throw stageError(Object.assign(new Error('Page unavailable'),{httpStatus:response?.status()}), 'http');
     // Give client-rendered screens, images and fonts time to settle.
     await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(1500);

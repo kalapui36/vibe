@@ -12,7 +12,7 @@
     "test": "node --test test/*.test.js",
     "start:auth": "node --use-env-proxy --env-file-if-exists=.env auth-server.js",
     "test:oauth": "node --test test/oauth.test.js test/github-pages-admin.test.js",
-    "test:simulation": "node --test test/ux-improvements.test.js test/visitor-scenarios.test.js test/admin-faults.test.js test/token-login.test.js test/pages.test.js test/github-pages-admin.test.js test/oauth.test.js test/links.test.js test/default-password.test.js"
+    "test:simulation": "node --test test/html-upload.test.js test/upload-ui.test.js test/local-html.test.js test/ux-improvements.test.js test/visitor-scenarios.test.js test/admin-faults.test.js test/token-login.test.js test/pages.test.js test/github-pages-admin.test.js test/oauth.test.js test/links.test.js test/default-password.test.js"
   },
   "engines": {
     "node": ">=24.5.0"

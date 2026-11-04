@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS apps (
 );`);
 
 const columns = new Set(db.prepare('PRAGMA table_info(apps)').all().map(column => column.name));
-for (const [name, definition] of [['primary_label', "TEXT NOT NULL DEFAULT ''"], ['links', "TEXT NOT NULL DEFAULT '[]'"], ['capture_error', 'TEXT']]) {
+for (const [name, definition] of [['primary_label', "TEXT NOT NULL DEFAULT ''"], ['links', "TEXT NOT NULL DEFAULT '[]'"], ['capture_error', 'TEXT'], ['html_path','TEXT'], ['html_filename','TEXT'], ['html_sha256','TEXT']]) {
   if (!columns.has(name)) db.exec(`ALTER TABLE apps ADD COLUMN ${name} ${definition}`);
 }
 
