@@ -128,5 +128,25 @@
     "capture_error": null,
     "capture_requested_at": "2026-11-04T03:10:17.624Z",
     "created_at": "2026-11-04T03:10:17.624Z"
+  },
+  {
+    "name": "우리 반 감정날씨",
+    "description": "",
+    "url": "https://kalapui.com/vibe/content/webapps/83851b47aec4954b996d6737/414ac84360dd7b37cf606dabe5d035064069e7298b052cc784d30f7c1d5fad0d.html",
+    "category": "mind",
+    "visible": true,
+    "primary_label": "",
+    "links": [],
+    "html_path": "content/webapps/83851b47aec4954b996d6737/414ac84360dd7b37cf606dabe5d035064069e7298b052cc784d30f7c1d5fad0d.html",
+    "html_filename": "3-2_우리반감정날씨.html",
+    "html_sha256": "414ac84360dd7b37cf606dabe5d035064069e7298b052cc784d30f7c1d5fad0d",
+    "id": "5325e9be-fd1b-43cf-8125-3067e3733e3d",
+    "position": 7,
+    "thumbnail": null,
+    "capture": null,
+    "capture_status": "pending",
+    "capture_error": null,
+    "capture_requested_at": "2026-11-04T03:10:53.863Z",
+    "created_at": "2026-11-04T03:10:53.863Z"
   }
 ]
