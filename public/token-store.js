@@ -1,7 +1,7 @@
 import { requestJson } from './request.js';
 // Transitional login only. The dispatcher disables this path once auth_url is configured.
 import { webAddress, relatedLinks, primaryLabel, creationId, sameEntryMetadata } from './catalog.js';
-import { validateHtml, htmlLocation } from './html-file.js';
+import { validateHtml, htmlLocation, htmlBlobSha } from './html-file.js';
 import { categoryKeys } from './categories.js';
 // Credentials stay in memory for this tab. No localStorage, public file, or URL tokens.
 let token = '';
@@ -69,7 +69,7 @@ function validated(body) {
 }
 async function uploadHtml(file,upload){
   const {branch}=await settings(),existing=await github(`/contents/${file}?ref=${encodeURIComponent(branch)}`,{allowMissing:true}),content=encode(upload.text);
-  if(existing){if(existing.content?.replace(/\s/g,'')===content)return;throw new Error('저장된 HTML 파일을 확인해 주세요.');}
+  if(existing){if(existing.sha===await htmlBlobSha(upload.text)||existing.content?.replace(/\s/g,'')===content)return;throw new Error('저장된 HTML 파일을 확인해 주세요.');}
   await github(`/contents/${file}`,{method:'PUT',body:{message:'Upload web app HTML',content,branch}});
 }
 export async function pagesApi(path, options = {}) {

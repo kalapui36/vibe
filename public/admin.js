@@ -50,6 +50,24 @@ function setBusy(value){
 function cancelImageRead(){imageReadVersion++;activeReader?.abort?.();activeReader=null;imageLoading=false;imageInvalid=false;syncSaveButton();}
 function toast(message) { const el=document.querySelector('#toast'); el.textContent=message; el.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,4500); }
 let sessionInfo={authenticated:false,configured:true,mode:isPages?'oauth':'password'};
+let watchingBuild=false;
+function watchBuild(){
+  const displayed=document.querySelector('meta[name="vibe-admin-build"]')?.content;
+  if(watchingBuild||!displayed||sessionInfo.mode!=='oauth')return;
+  watchingBuild=true;let checking=false;
+  async function check(){
+    if(checking||document.hidden||editor.open||busy||dragging||document.querySelector('#delete-dialog').open)return;
+    checking=true;
+    try{
+      const response=await fetch('/healthz',{cache:'no-store',signal:AbortSignal.timeout(5000)});
+      if(response.ok){const latest=await response.json();if(latest.uiVersion&&latest.uiVersion!==displayed)location.reload();}
+    }catch{/* A transient health-check failure must not interrupt editing. */}
+    finally{checking=false;}
+  }
+  window.addEventListener('focus',check);
+  document.addEventListener('visibilitychange',check);
+  setInterval(check,60000);
+}
 const oauthErrors={account:'이 GitHub 계정은 관리자로 허용되지 않습니다. kalapui36 계정으로 로그인해 주세요.',state:'로그인 확인이 만료되었습니다. GitHub 로그인을 다시 시작해 주세요.',cancelled:'GitHub 로그인이 취소되었습니다.',expired:'GitHub 인증이 만료되었습니다. 다시 로그인해 주세요.',provider:'GitHub 인증을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.'};
 function errorMessage(error) {
   if(error.status===401||(error.status===403&&error.code==='access_denied')) {
@@ -256,9 +274,10 @@ form.addEventListener('submit',async event=>{
     const payload={name:form.elements.name.value,url:form.elements.url.value,description:form.elements.description.value,category:form.elements.category.value,visible:form.elements.visible.checked,primary_label:primaryLabel(form.elements.primary_label.value),links:relatedLinks([...document.querySelectorAll('.related-row')].map(row=>({label:row.querySelector('.link-label').value,url:row.querySelector('.link-url').value})))};
     if(htmlMode()&&htmlChange)payload.html={filename:htmlChange.filename,text:htmlChange.text};
     let id=editing?.id;
-    if(id) await api(`/api/admin/apps/${id}`,{method:'PUT',body:payload});
-    else {const created=await api('/api/admin/apps',{method:'POST',body:{...payload,request_id:draftId}});id=created.id;editing=created;form.elements.url.value=created.url;}
-    if(imageChange!==undefined) await api(`/api/admin/apps/${id}/thumbnail`,{method:'PUT',body:{image:imageChange}});
+    const timeoutMs=htmlMode()&&htmlChange?90000:15000;
+    if(id) await api(`/api/admin/apps/${id}`,{method:'PUT',body:payload,timeoutMs});
+    else {const created=await api('/api/admin/apps',{method:'POST',body:{...payload,request_id:draftId},timeoutMs});id=created.id;editing=created;form.elements.url.value=created.url;}
+    if(imageChange!==undefined) await api(`/api/admin/apps/${id}/thumbnail`,{method:'PUT',body:{image:imageChange},timeoutMs:60000});
     editor.close();await refresh();toast(isPages||sessionInfo.mode==='oauth'?'저장했습니다. 공개 페이지에 반영되기까지 잠시 걸릴 수 있습니다.':'저장했습니다.');
   }catch(error){
     if(error.code==='invalid_html'){htmlError(error.message);document.querySelector('#html-dropzone').focus();}
@@ -275,7 +294,7 @@ async function bootstrap(){
   try{
     for(let attempt=0;attempt<2;attempt++){
       try{
-        const session=await api('/api/session');sessionInfo=session;
+        const session=await api('/api/session');sessionInfo=session;watchBuild();
         if(session.authenticated)await startDashboard();else showLogin(session,notice);
         return;
       }catch(error){

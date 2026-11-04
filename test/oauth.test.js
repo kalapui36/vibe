@@ -99,3 +99,12 @@ test('등록 응답 유실 재시도는 같은 ID를 복구하고 다른 내용�
   const changed=await f.request('/api/admin/apps',{cookie,method:'POST',body:{...body,name:'다른 이름'},revision});assert.equal(changed.status,409);assert.equal(f.state.rows[0].name,input.name);
  }finally{await f.close();}
 });
+
+test('관리자 화면·기능·배포 버전을 확인하고 HTML과 자산은 캐시하지 않는다',async()=>{
+ const f=await oauthFixture();try{
+  const health=await f.request('/healthz'),info=await health.json();assert.equal(info.capabilities.htmlUpload,true);assert.ok(info.capabilities.categories.includes('other'));assert.equal(info.uiVersion,f.build.uiVersion);
+  assert.equal(JSON.stringify(info).includes('test-client-secret'),false);
+  const response=await f.request('/admin'),html=await response.text();assert.equal(response.headers.get('cache-control'),'no-store');assert.ok(html.includes('HTML 업로드'));assert.ok(html.includes('Vibe Connect'));assert.ok(html.includes(`src="/admin.js?v=${info.uiVersion}"`));
+  const script=await f.request('/admin.js?v='+info.uiVersion);assert.equal(script.status,200);assert.equal(script.headers.get('cache-control'),'no-store');
+ }finally{await f.close();}
+});

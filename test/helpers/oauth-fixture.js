@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { createHash } from 'node:crypto';
 import { createOAuthApp, readConfig } from '../../lib/oauth-app.js';
+import { buildInfo } from '../../lib/build-info.js';
 export async function oauthFixture({secure=false,configured=true}={}){
   const state={rows:[],revision:'catalog-0',configRevision:'config-0',publicConfig:{owner:'kalapui36',repo:'vibe',branch:'main'},permission:true,apiDown:false,revoked:new Set(),calls:[],uploads:[],htmlFiles:new Map(),exchange:[],exchanges:0};
   const server=http.createServer();
@@ -50,18 +51,19 @@ export async function oauthFixture({secure=false,configured=true}={}){
     if(path.startsWith('content/thumbnails/')&&method==='PUT'){state.uploads.push(payload);return reply({content:{sha:'image-1'}});}
     if(path.startsWith('content/webapps/')){
       const existing=state.htmlFiles.get(path);
-      if(method==='GET')return existing?reply({sha:existing.sha,encoding:'base64',content:existing.content}):reply({},404);
+      if(method==='GET')return existing?reply({sha:existing.sha,encoding:Buffer.from(existing.content,'base64').length>1024*1024?'none':'base64',content:Buffer.from(existing.content,'base64').length>1024*1024?'':existing.content}):reply({},404);
       if(method==='PUT'){
         if(state.htmlFailure)return reply({},503);
         if(existing)return reply({},422);
-        const file={sha:`html-${state.htmlFiles.size}`,content:payload.content};state.htmlFiles.set(path,file);
+        const bytes=Buffer.from(payload.content,'base64');
+        const file={sha:createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),content:payload.content};state.htmlFiles.set(path,file);
         if(state.lostHtmlResponse){state.lostHtmlResponse=false;return reply({},503);}
         return reply({content:{sha:file.sha}});
       }
     }
     throw new Error('Unexpected method');
   };
-  server.on('request',createOAuthApp(config,{fetcher}));
+  const build=buildInfo();server.on('request',createOAuthApp(config,{fetcher,build}));
   const cookiesFrom=response=>response.headers.getSetCookie();
   const cookieFor=(response,kind)=>cookiesFrom(response).find(value=>value.startsWith(`${secure?'__Host-':''}vibe_${kind}=`)&&!value.startsWith(`${secure?'__Host-':''}vibe_${kind}=;`))?.split(';')[0];
   async function startLogin(){const response=await fetch(base+'/auth/login',{redirect:'manual'});return {response,url:new URL(response.headers.get('location'),base),cookie:cookieFor(response,'oauth')};}
@@ -74,5 +76,5 @@ export async function oauthFixture({secure=false,configured=true}={}){
   async function request(path,{cookie,method='GET',body,revision,origin=config.origin,header=true}={}){
     return fetch(base+path,{method,redirect:'manual',headers:{'Content-Type':'application/json',...(header?{'X-Vibe-Request':'1'}:{}),...(cookie?{Cookie:cookie}:{}),...(origin?{Origin:origin}:{}),...(revision?{'If-Match':revision}:{})},body:body===undefined?undefined:JSON.stringify(body)});
   }
-  return {base,config,state,server,login,startLogin,callback,request,cookieFor,close:()=>new Promise(resolve=>server.close(resolve)),challenge:verifier=>createHash('sha256').update(verifier).digest('base64url')};
+  return {base,config,state,build,server,login,startLogin,callback,request,cookieFor,close:()=>new Promise(resolve=>server.close(resolve)),challenge:verifier=>createHash('sha256').update(verifier).digest('base64url')};
 }

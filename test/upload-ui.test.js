@@ -7,14 +7,14 @@ import {oauthFixture} from './helpers/oauth-fixture.js';
 const html='<!doctype html><html lang="ko"><meta charset="utf-8"><title>올린 앱</title><h1>HTML 활동</h1><button id="counter">0</button><script>window.uploadCodeExecuted=true;counter.onclick=()=>{counter.textContent=Number(counter.textContent)+1;localStorage.setItem("count",counter.textContent);};</script></html>';
 test('HTML·썸네일 파일 선택과 드래그 앤 드롭',async t=>{
  const browser=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox','--disable-dev-shm-usage']});await mkdir('test-results/uploads',{recursive:true});
- async function fixture({mobile=false,login=true}={}){
+ async function fixture({mobile=false,login=true,clock=false}={}){
   const f=await oauthFixture(),context=await browser.newContext({viewport:{width:mobile?390:1280,height:mobile?844:900},isMobile:mobile,hasTouch:mobile});
   if(login){const {cookie}=await f.login();const [name,...value]=cookie.split('=');await context.addCookies([{name,value:value.join('='),url:f.base,httpOnly:true,sameSite:'Lax'}]);}
   await context.route('https://kalapui.com/**',route=>{
    const path=new URL(route.request().url()).pathname.slice('/vibe/'.length),file=f.state.htmlFiles.get(path);
    return file?route.fulfill({contentType:'text/html; charset=utf-8',body:Buffer.from(file.content,'base64')}):route.fulfill({status:404,body:''});
   });
-  const page=await context.newPage();await page.goto(f.base+'/admin');if(login)await page.locator('#add-app').waitFor();else await page.locator('.oauth-button').waitFor();
+  const page=await context.newPage();if(clock)await page.clock.install();await page.goto(f.base+'/admin');if(login)await page.locator('#add-app').waitFor();else await page.locator('.oauth-button').waitFor();
   return {f,page,context,close:async()=>{await context.close();await f.close();}};
  }
  async function drop(page,selector,files){
@@ -82,6 +82,25 @@ test('HTML·썸네일 파일 선택과 드래그 앤 드롭',async t=>{
     await page.route(f.base+'/api/admin/apps',async route=>{if(route.request().method()==='POST'&&!damaged){damaged=true;const response=await route.fetch();const headers={...response.headers()};delete headers['content-length'];return route.fulfill({status:response.status(),headers,body:'{'});}return route.continue();});
     await openHtml(page);await drop(page,'#html-dropzone',[{name:'재시도.html',text:html}]);await htmlReady(page);await page.locator('#save-app').click();await page.waitForFunction(()=>document.querySelector('#editor-error').textContent.length>0);assert.equal(f.state.rows.length,1);
     await page.locator('#save-app').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);assert.equal(f.state.rows.length,1);assert.equal(f.state.htmlFiles.size,1);
+   }finally{await close();}
+  });
+  await t.test('큰 HTML 저장이 15초를 넘어도 중단하지 않고 완료까지 대기',async()=>{
+   const {f,page,close}=await fixture({clock:true});let pending;
+   try{
+    await page.route(f.base+'/api/admin/apps',route=>route.request().method()==='POST'?(pending=route):route.continue());
+    await openHtml(page);await drop(page,'#html-dropzone',[{name:'기다리는파일.html',text:html}]);await htmlReady(page);await page.locator('#save-app').click();
+    await page.clock.runFor(16000);assert.equal(await page.locator('#save-app').isDisabled(),true);assert.equal(await page.locator('#editor-error').textContent(),'');
+    await pending.continue();await page.waitForFunction(()=>!document.querySelector('#editor').open);assert.equal(f.state.rows.length,1);
+   }finally{await close();}
+  });
+  await t.test('업데이트 감지는 편집 중 입력을 유지하고 편집창을 닫은 뒤 새 화면으로 갱신',async()=>{
+   const {f,page,close}=await fixture();try{
+    const displayed=await page.locator('meta[name=vibe-admin-build]').getAttribute('content');
+    await page.locator('#add-app').click();await page.locator('[name=name]').fill('보존할 입력');f.build.uiVersion='updated-version';
+    await page.evaluate(()=>dispatchEvent(new Event('focus')));assert.equal(await page.locator('[name=name]').inputValue(),'보존할 입력');assert.equal(await page.locator('meta[name=vibe-admin-build]').getAttribute('content'),displayed);
+    page.once('dialog',dialog=>dialog.accept());await page.locator('#cancel-editor').click();
+    const navigation=page.waitForNavigation();await page.evaluate(()=>dispatchEvent(new Event('focus')));await navigation;await page.locator('#add-app').waitFor();
+    assert.equal(await page.locator('meta[name=vibe-admin-build]').getAttribute('content'),'updated-version');
    }finally{await close();}
   });
  }finally{await browser.close();}

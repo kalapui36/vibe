@@ -1,13 +1,14 @@
 // Keep the deadline active until the JSON body has also finished downloading.
 export async function requestJson(url,options={}){
+  const {timeoutMs=15000,...fetchOptions}=options;
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),15000);
+  const timeout=setTimeout(()=>controller.abort(),timeoutMs);
   const abort=()=>controller.abort();
   if(options.signal?.aborted)controller.abort();
   options.signal?.addEventListener('abort',abort,{once:true});
   let response;
   try{
-    response=await fetch(url,{...options,signal:controller.signal});
+    response=await fetch(url,{...fetchOptions,signal:controller.signal});
     let data;
     try{data=response.status===204?null:await response.json();}
     catch(error){if(controller.signal.aborted)throw error;throw Object.assign(new Error('서버 응답을 확인하지 못했습니다. 다시 시도해 주세요.'),{status:response.status,code:'invalid_response'});}

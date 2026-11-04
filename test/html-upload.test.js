@@ -37,6 +37,16 @@ test('HTML 등록·호스팅·충돌·재시도 API',async t=>{
    assert.equal((await create(f)).status,201);assert.equal(f.state.htmlFiles.size,1);assert.equal(f.state.rows.length,1);
   }finally{await f.close();}
  });
+ await t.test('1MB를 넘는 HTML도 GitHub가 본문을 생략한 응답에서 재사용·재저장 가능',async()=>{
+  const f=await fixture();try{
+   const upload={filename:'large.html',text:html+'<p>'+'a'.repeat(1100000)+'</p>'};
+   const created=await create(f,{...draft,html:upload});assert.equal(created.status,201);const app=await created.json();
+   const response=await f.request('/api/admin/apps/'+app.id,{method:'PUT',revision:f.state.revision,body:{name:'다시 저장한 큰 HTML',html:upload}});
+   assert.equal(response.status,200);assert.equal(f.state.htmlFiles.size,1);assert.equal(f.state.rows[0].name,'다시 저장한 큰 HTML');
+   f.state.htmlFiles.get(app.html_path).sha='0'.repeat(40);
+   assert.equal((await f.request('/api/admin/apps/'+app.id,{method:'PUT',revision:f.state.revision,body:{html:upload}})).status,409,'Mismatched Git object must still be rejected');
+  }finally{await f.close();}
+ });
  await t.test('파일 저장 실패·잘못된 HTML·초과 용량은 목록에 추가하지 않음',async()=>{
   const f=await fixture();try{
    f.state.htmlFailure=true;assert.equal((await create(f)).status,503);assert.equal(f.state.rows.length,0);f.state.htmlFailure=false;

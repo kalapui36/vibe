@@ -8,6 +8,11 @@ export function validateHtml(value){
   return {filename:value.filename,text:value.text};
 }
 async function digest(text){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(byte=>byte.toString(16).padStart(2,'0')).join('');}
+export async function htmlBlobSha(text){
+  const bytes=new TextEncoder().encode(text),header=new TextEncoder().encode(`blob ${bytes.length}\0`),blob=new Uint8Array(header.length+bytes.length);
+  blob.set(header);blob.set(bytes,header.length);
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-1',blob))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+}
 export async function htmlLocation(id,upload,base,prefix='content/webapps'){
   const hash=await digest(upload.text),folder=(await digest(String(id))).slice(0,24);
   const path=`${prefix}/${folder}/${hash}.html`;
