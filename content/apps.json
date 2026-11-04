@@ -89,7 +89,7 @@
   },
   {
     "name": "카드 뉴스 내용의 타당성 판단",
-    "description": "",
+    "description": "카드 뉴스를 읽고 주장, 이유, 근거 탐색하여 내용의 타당성을 판단하는 수업 프로그램",
     "url": "https://kalapui.com/media-lesson",
     "category": "class",
     "visible": true,
