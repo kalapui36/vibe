@@ -188,5 +188,25 @@
     "capture_error": null,
     "capture_requested_at": "2026-11-04T03:11:32.024Z",
     "created_at": "2026-11-04T03:11:32.024Z"
+  },
+  {
+    "name": "마음 구급상자",
+    "description": "",
+    "url": "https://kalapui.com/vibe/content/webapps/9f41713c6a7d425c4ae489d6/7558da0598cf7089b64ee38e6539b55b184951258313a33b0b3b1dca8d7f79be.html",
+    "category": "class",
+    "visible": true,
+    "primary_label": "",
+    "links": [],
+    "html_path": "content/webapps/9f41713c6a7d425c4ae489d6/7558da0598cf7089b64ee38e6539b55b184951258313a33b0b3b1dca8d7f79be.html",
+    "html_filename": "4-3_마음구급상자.html",
+    "html_sha256": "7558da0598cf7089b64ee38e6539b55b184951258313a33b0b3b1dca8d7f79be",
+    "id": "cb55566e-d714-40b4-9d96-14092d5e1c85",
+    "position": 10,
+    "thumbnail": null,
+    "capture": null,
+    "capture_status": "pending",
+    "capture_error": null,
+    "capture_requested_at": "2026-11-04T03:11:50.644Z",
+    "created_at": "2026-11-04T03:11:50.644Z"
   }
 ]
