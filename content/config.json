@@ -1,5 +1,6 @@
 {
   "owner": "kalapui36",
   "repo": "vibe",
-  "branch": "main"
+  "branch": "main",
+  "auth_url": "https://vibe-admin.onrender.com"
 }
