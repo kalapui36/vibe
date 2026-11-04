@@ -168,5 +168,25 @@
     "capture_error": null,
     "capture_requested_at": "2026-11-04T03:11:14.970Z",
     "created_at": "2026-11-04T03:11:14.970Z"
+  },
+  {
+    "name": "말의 온도계",
+    "description": "",
+    "url": "https://kalapui.com/vibe/content/webapps/1b60121d139b0d3551972c91/108dd7218eb4da1b921892c9846593fc770450147133e258034c1a2dc35b4e88.html",
+    "category": "mind",
+    "visible": true,
+    "primary_label": "",
+    "links": [],
+    "html_path": "content/webapps/1b60121d139b0d3551972c91/108dd7218eb4da1b921892c9846593fc770450147133e258034c1a2dc35b4e88.html",
+    "html_filename": "4-2_말의온도계.html",
+    "html_sha256": "108dd7218eb4da1b921892c9846593fc770450147133e258034c1a2dc35b4e88",
+    "id": "32832f73-3763-4daf-9efb-dfc7161a9e1c",
+    "position": 9,
+    "thumbnail": null,
+    "capture": null,
+    "capture_status": "pending",
+    "capture_error": null,
+    "capture_requested_at": "2026-11-04T03:11:32.024Z",
+    "created_at": "2026-11-04T03:11:32.024Z"
   }
 ]
