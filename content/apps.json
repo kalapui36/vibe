@@ -208,5 +208,22 @@
     "capture_error": null,
     "capture_requested_at": "2026-11-04T03:11:50.644Z",
     "created_at": "2026-11-04T03:11:50.644Z"
+  },
+  {
+    "name": "이어그리기",
+    "description": "",
+    "url": "https://kalapui.com/relaydraw",
+    "category": "other",
+    "visible": true,
+    "primary_label": "",
+    "links": [],
+    "id": "bf94b452-3813-410b-8810-3051987a41e9",
+    "position": 11,
+    "thumbnail": null,
+    "capture": null,
+    "capture_status": "pending",
+    "capture_error": null,
+    "capture_requested_at": "2026-11-04T03:12:49.048Z",
+    "created_at": "2026-11-04T03:12:49.048Z"
   }
 ]
