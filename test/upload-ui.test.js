@@ -27,6 +27,7 @@ test('HTML·썸네일 파일 선택과 드래그 앤 드롭',async t=>{
   await t.test('로그인 제목과 버튼만 표시하고 계정·기기·권한 안내 문구 제거',async()=>{
    const {page,close}=await fixture({login:false});try{
     assert.equal(await page.locator('.login-panel h1').textContent(),'관리자 로그인');
+    assert.equal(await page.title(),'관리자 · Vibe Connect');
     const text=await page.locator('.login-panel').textContent();assert.equal(text.includes('kalapui36'),false);assert.equal(text.includes('다른 기기'),false);assert.equal(text.includes('권한 승인'),false);
     assert.equal(await page.getByRole('heading',{name:'GitHub로 로그인'}).count(),0);
     await page.screenshot({path:'test-results/uploads/login.png'});
@@ -36,14 +37,16 @@ test('HTML·썸네일 파일 선택과 드래그 앤 드롭',async t=>{
    const {f,page,context,close}=await fixture();let server;
    try{
     await openHtml(page);await drop(page,'#html-dropzone',[{name:'학급활동.html',type:'text/html',text:html}]);await htmlReady(page);
+    await page.locator('.category-options label').filter({hasText:'기타'}).click();
     assert.equal(await page.locator('[name=name]').inputValue(),'학급활동');assert.equal(await page.locator('[name=url]').isDisabled(),true);assert.equal(await page.evaluate(()=>window.uploadCodeExecuted),undefined);
     await page.screenshot({path:'test-results/uploads/html-drop.png'});
     const image=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=12;c.height=12;const ctx=c.getContext('2d');ctx.fillStyle='#3564de';ctx.fillRect(0,0,12,12);return c.toDataURL('image/png');});
     await drop(page,'#image-dropzone',[{name:'대표.png',bytes:[...Buffer.from(image.split(',')[1],'base64')]}]);await page.locator('#image-preview img').waitFor();await page.waitForFunction(()=>!document.querySelector('#save-app').disabled);
     await page.locator('#save-app').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
-    assert.equal(f.state.rows.length,1);assert.equal(f.state.htmlFiles.size,1);assert.equal(f.state.uploads.length,1);
+    assert.equal(f.state.rows.length,1);assert.equal(f.state.rows[0].category,'other');assert.equal(f.state.htmlFiles.size,1);assert.equal(f.state.uploads.length,1);
     const site=express();site.get('/vibe/content/apps.json',(req,res)=>res.json(f.state.rows));site.use('/vibe',express.static(process.cwd()));server=await new Promise(resolve=>{const s=site.listen(0,'127.0.0.1',()=>resolve(s));});
     await page.goto(`http://127.0.0.1:${server.address().port}/vibe/`);await page.locator('.app-card').waitFor();
+    assert.equal(await page.locator('.category-label.other').textContent(),'기타');
     const ready=page.waitForEvent('popup');await page.locator('.card-title-row').click();const popup=await ready;await popup.getByRole('heading',{name:'HTML 활동'}).waitFor();await popup.locator('#counter').click();assert.equal(await popup.locator('#counter').textContent(),'1');assert.equal(await popup.evaluate(()=>localStorage.getItem('count')),'1');assert.equal((await popup.evaluate(()=>document.cookie)).includes('vibe_session'),false);await popup.close();
    }finally{await close();if(server)await new Promise(resolve=>server.close(resolve));}
   });

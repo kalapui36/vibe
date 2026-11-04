@@ -1,5 +1,6 @@
 import { webAddress, relatedLinks, primaryLabel, creationId, sameEntryMetadata } from './public/catalog.js';
 import { validateHtml, htmlLocation } from './public/html-file.js';
+import { categoryKeys } from './public/categories.js';
 import express from 'express';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { writeFile, mkdir } from 'node:fs/promises';
@@ -81,7 +82,7 @@ async function validate(body,{hosted=false}={}) {
   const name = String(body.name || '').trim();
   const description = String(body.description || '').trim();
   if (!name || name.length > 80 || description.length > 240) throw new Error('이름은 1~80자, 설명은 240자 이내로 입력해 주세요.');
-  if (!['class', 'mind', 'work'].includes(body.category)) throw new Error('분류를 선택해 주세요.');
+  if (!categoryKeys.includes(body.category)) throw new Error('분류를 선택해 주세요.');
   return { name, description, url: hosted?webAddress(body.url):normalizeUrl(body.url), category: body.category, visible: body.visible === false ? 0 : 1, primary_label: primaryLabel(body.primary_label), links:relatedLinks(body.links).map(link=>({...link,url:normalizeUrl(link.url)})) };
 }
 app.post('/api/admin/apps', admin, async (req, res) => {

@@ -29,6 +29,17 @@ test('방문자 이용 상황 시뮬레이션',async t=>{
   await t.test('검색·검색 결과 없음·필터 초기화',async()=>{
    const page=await pageWith();try{await page.locator('.app-card').first().waitFor();await page.locator('#search').fill('지구촌');assert.equal(await page.locator('.app-card').count(),1);await page.locator('#search').fill('없는 프로그램');await page.getByText('검색 결과가 없습니다.').waitFor();await page.locator('#reset-filters').click();assert.equal(await page.locator('.app-card').count(),3);}finally{await page.close();}
   });
+  await t.test('기타 탭·검색·주소 상태 복원과 작은 모바일 탐색',async()=>{
+   const other={id:'other',name:'기타 도구',description:'다른 용도의 앱',url:'https://example.org/other',category:'other',visible:true,position:3};
+   const page=await pageWith([...sample,other],{width:320});try{
+    await page.locator('.app-card').first().waitFor();assert.equal(await page.locator('.app-card').count(),4);assert.equal(await page.locator('#count-other').textContent(),'1');
+    await page.locator('.tab[data-category=other]').click();assert.equal(await page.locator('.app-card').count(),1);assert.equal(await page.locator('.category-label.other').textContent(),'기타');assert.equal(await page.locator('.thumbnail-fallback.other svg').count(),1);
+    await page.locator('#search').fill('기타');assert.match(await page.getByRole('option').textContent(),/기타 도구.*기타/);await page.locator('#search').press('Escape');
+    await page.reload();await page.locator('.app-card').waitFor();assert.equal(await page.locator('.tab.active').getAttribute('data-category'),'other');assert.equal(await page.locator('#search').inputValue(),'기타');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    await page.locator('#search').fill('');await page.locator('.tab[data-category=mind]').click();assert.equal(await page.locator('.app-card').count(),1);assert.match(await page.locator('.app-card').textContent(),/나무 길/);
+   }finally{await page.close();}
+  });
   await t.test('숨김·위험한 주소·부분 손상 자료가 나머지 목록을 막지 않음',async()=>{
    const page=await pageWith([...sample,null,{},[],{...sample[0],visible:false},{...sample[0],url:'javascript:alert(1)'},{...sample[0],url:'https://user:password@example.com'},{...sample[0],category:'__proto__'}]);
    try{await page.waitForFunction(()=>document.querySelector('.app-card')||document.querySelector('#retry'));assert.equal(await page.locator('.app-card').count(),3);}finally{await page.close();}
@@ -83,7 +94,7 @@ test('방문자 이용 상황 시뮬레이션',async t=>{
    try{await page.locator('.related-link').waitFor();const bounds=await page.locator('.related-link').boundingBox();const card=await page.locator('.app-item').boundingBox();assert.ok(bounds.x+bounds.width<=card.x+card.width+1,'Related link must fit inside card');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}finally{await page.close();}
   });
   await t.test('키보드 탐색과 빠른 탭 변경·움직임 줄이기',async()=>{
-   const page=await pageWith();try{await page.locator('.app-card').first().waitFor();await page.emulateMedia({reducedMotion:'reduce'});await page.locator('.tab[data-category=all]').focus();await page.keyboard.press('End');assert.equal(await page.locator('.tab.active').getAttribute('data-category'),'work');await page.keyboard.press('Home');assert.equal(await page.locator('.tab.active').getAttribute('data-category'),'all');for(const category of ['class','mind','work','class'])await page.locator(`.tab[data-category=${category}]`).click();assert.match(await page.locator('.app-card').textContent(),/지구촌/);assert.equal(await page.locator('#results').evaluate(el=>el.getAnimations().length),0);}finally{await page.close();}
+   const page=await pageWith();try{await page.locator('.app-card').first().waitFor();await page.emulateMedia({reducedMotion:'reduce'});await page.locator('.tab[data-category=all]').focus();await page.keyboard.press('End');assert.equal(await page.locator('.tab.active').getAttribute('data-category'),'other');await page.keyboard.press('Home');assert.equal(await page.locator('.tab.active').getAttribute('data-category'),'all');for(const category of ['class','mind','work','class'])await page.locator(`.tab[data-category=${category}]`).click();assert.match(await page.locator('.app-card').textContent(),/지구촌/);assert.equal(await page.locator('#results').evaluate(el=>el.getAnimations().length),0);}finally{await page.close();}
   });
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });

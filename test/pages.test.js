@@ -25,7 +25,10 @@ test('GitHub Pages /vibe/ 경로에서 화면·목록·필터·관리자 안내�
     await page.route(url+'content/config.json',route=>route.fulfill({json:{owner:'kalapui36',repo:'vibe',branch:'main'}}));
     await page.goto(url);
     await page.getByText('아직 등록된 웹앱이 없습니다.').waitFor();
-    assert.equal(await page.title(), '3색 바이브코딩');
+    assert.equal(await page.title(), 'Vibe Connect');
+    assert.equal(await page.locator('#page-title').textContent(),'Vibe Connect');
+    assert.equal(await page.locator('.tab').count(),5);
+    assert.match(await page.locator('.tab[data-category=other]').textContent(),/기타/);
     assert.match(await page.locator('link[rel=stylesheet]').getAttribute('href'), /^\.\/public\//);
     await page.locator('.admin-link').click();
     assert.equal(page.url(),url+'manage.html');

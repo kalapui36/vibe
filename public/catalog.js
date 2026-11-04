@@ -1,3 +1,4 @@
+import { categoryKeys } from './categories.js';
 export function webAddress(value) {
   let url;
   try { url = new URL(value); } catch { throw new Error('올바른 웹 주소를 입력해 주세요.'); }
@@ -20,7 +21,7 @@ export function primaryLabel(value = '') {
 
 export function publicCatalog(rows,base){
   if(!Array.isArray(rows))throw new Error('웹앱 목록 형식을 확인해 주세요.');
-  const allowed=new Set(['class','mind','work']);
+  const allowed=new Set(categoryKeys);
   const asset=value=>{
     if(typeof value!=='string'||!value)return null;
     try{const url=new URL(value,base);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:null;}catch{return null;}

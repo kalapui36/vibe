@@ -2,13 +2,14 @@ import { requestJson } from './request.js';
 // Transitional login only. The dispatcher disables this path once auth_url is configured.
 import { webAddress, relatedLinks, primaryLabel, creationId, sameEntryMetadata } from './catalog.js';
 import { validateHtml, htmlLocation } from './html-file.js';
+import { categoryKeys } from './categories.js';
 // Credentials stay in memory for this tab. No localStorage, public file, or URL tokens.
 let token = '';
 let config;
 let snapshot;
 const catalogPath = 'content/apps.json';
 const baseUrl = new URL('../', import.meta.url);
-const categories = new Set(['class', 'mind', 'work']);
+const categories = new Set(categoryKeys);
 
 async function settings() {
   if (!config) {

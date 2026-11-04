@@ -33,8 +33,9 @@ test('전환 전 토큰 관리자도 계정 차단·등록·응답 유실 복구
   await page.locator('#save-app').click();await page.locator('#reload-editor:not([hidden])').waitFor();await page.locator('#reload-editor').click();
   await page.waitForFunction(()=>document.querySelector('#editor-title').textContent==='웹앱 수정');await page.locator('#save-app').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);assert.equal(rows.length,1);
   await page.locator('#add-app').click();await page.getByText('HTML 업로드',{exact:true}).click();
+  await page.locator('.category-options label').filter({hasText:'기타'}).click();
   await page.locator('#html-file').setInputFiles({name:'파일등록.html',mimeType:'text/html',buffer:Buffer.from('<!doctype html><h1>한글 HTML</h1>')});
-  await page.waitForFunction(()=>document.querySelector('#html-status').textContent.includes('저장하면 반영됩니다.'));await page.locator('#save-app').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);assert.equal(rows.length,2);assert.equal(files.size,1);assert.equal(rows[1].html_filename,'파일등록.html');
+  await page.waitForFunction(()=>document.querySelector('#html-status').textContent.includes('저장하면 반영됩니다.'));await page.locator('#save-app').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);assert.equal(rows.length,2);assert.equal(files.size,1);assert.equal(rows[1].html_filename,'파일등록.html');assert.equal(rows[1].category,'other');
   await page.locator('#logout').click();await page.locator('[name=token]').waitFor();assert.equal(await page.locator('#add-app').count(),0);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
