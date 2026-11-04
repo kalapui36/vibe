@@ -108,5 +108,25 @@
     "capture_error": null,
     "capture_requested_at": "2026-11-04T00:14:55.920Z",
     "created_at": "2026-11-04T00:14:55.920Z"
+  },
+  {
+    "name": "마음해결사 챗봇",
+    "description": "",
+    "url": "https://kalapui.com/vibe/content/webapps/27d1de238938cc18dfe3c189/f64059ceb5d0276bf61048c2f8738cfbad860dfca15e5bbc2f06e87d185c4e17.html",
+    "category": "class",
+    "visible": true,
+    "primary_label": "",
+    "links": [],
+    "html_path": "content/webapps/27d1de238938cc18dfe3c189/f64059ceb5d0276bf61048c2f8738cfbad860dfca15e5bbc2f06e87d185c4e17.html",
+    "html_filename": "3-1_마음해결사챗봇.html",
+    "html_sha256": "f64059ceb5d0276bf61048c2f8738cfbad860dfca15e5bbc2f06e87d185c4e17",
+    "id": "bca7ad3c-cade-4ee5-954c-00f3acb00f4e",
+    "position": 6,
+    "thumbnail": null,
+    "capture": null,
+    "capture_status": "pending",
+    "capture_error": null,
+    "capture_requested_at": "2026-11-04T03:10:17.624Z",
+    "created_at": "2026-11-04T03:10:17.624Z"
   }
 ]
