@@ -9,7 +9,7 @@ const tabs = [...document.querySelectorAll('.tab')];
 const indicator = document.querySelector('.tab-indicator');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const validCategories = ['all', ...Object.keys(categories)];
-const boardOrder=['class','work','mind','other'].filter(key=>Object.hasOwn(categories,key));
+const boardOrder=tabs.map(tab=>tab.dataset.category).filter(key=>Object.hasOwn(categories,key));
 if ('scrollRestoration' in history) history.scrollRestoration='manual';
 function updateIndicator() {
   const tab = document.querySelector('.tab.active');

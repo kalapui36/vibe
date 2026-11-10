@@ -29,10 +29,10 @@ test('방문자 이용 상황 시뮬레이션',async t=>{
   await t.test('검색·검색 결과 없음·필터 초기화',async()=>{
    const page=await pageWith();try{await page.locator('.app-card').first().waitFor();await page.locator('#search').fill('지구촌');assert.equal(await page.locator('.app-card').count(),1);await page.locator('#search').fill('없는 프로그램');await page.getByText('검색 결과가 없습니다.').waitFor();await page.locator('#reset-filters').click();assert.equal(await page.locator('.app-card').count(),3);}finally{await page.close();}
   });
-  await t.test('전체 보기는 수업·업무·사회정서·기타 열과 분류 안의 순서를 유지',async()=>{
+  await t.test('전체 보기는 탭과 같은 수업·사회정서·업무·기타 열과 분류 안의 순서를 유지',async()=>{
    const data=[{...sample[2],position:0},{...sample[0],position:1},{...sample[1],position:2},{...sample[0],id:'class-2',name:'두 번째 수업',position:3}];
    const page=await pageWith(data);try{
-    await page.locator('.app-card').first().waitFor();assert.deepEqual(await page.locator('.board-column').evaluateAll(columns=>columns.map(column=>column.dataset.column)),['class','work','mind','other']);
+    await page.locator('.app-card').first().waitFor();const order=await page.locator('.board-column').evaluateAll(columns=>columns.map(column=>column.dataset.column));assert.deepEqual(order,['class','mind','work','other']);assert.deepEqual(order,await page.locator('.tab:not([data-category=all])').evaluateAll(tabs=>tabs.map(tab=>tab.dataset.category)));
     assert.deepEqual(await page.locator('[data-column=class] .card-title-row h3').allTextContents(),[sample[0].name,'두 번째 수업']);assert.equal(await page.locator('[data-column=work] .app-card').count(),1);assert.equal(await page.locator('[data-column=mind] .app-card').count(),1);assert.equal(await page.locator('[data-column=other] .board-empty').count(),1);
     const positions=await page.locator('.board-column').evaluateAll(columns=>columns.map(column=>({x:column.getBoundingClientRect().x,y:column.getBoundingClientRect().y})));
     assert.ok(positions.every((p,i)=>!i||p.x>positions[i-1].x));assert.ok(positions.every(p=>Math.abs(p.y-positions[0].y)<1));
