@@ -9,6 +9,7 @@ const tabs = [...document.querySelectorAll('.tab')];
 const indicator = document.querySelector('.tab-indicator');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const validCategories = ['all', ...Object.keys(categories)];
+const boardOrder=['class','work','mind','other'].filter(key=>Object.hasOwn(categories,key));
 if ('scrollRestoration' in history) history.scrollRestoration='manual';
 function updateIndicator() {
   const tab = document.querySelector('.tab.active');
@@ -26,7 +27,7 @@ function readLocation() {
   search.value=params.get('q')||'';selectedId=params.get('app')||'';applyCategory();
 }
 function saveScroll() {
-  if(loadState==='ready'&&!restoring) history.replaceState({...history.state,vibeScroll:scrollY},'');
+  if(loadState==='ready'&&!restoring) history.replaceState({...history.state,vibeScroll:scrollY,vibeBoardScroll:results.querySelector('.category-board')?.scrollLeft??history.state?.vibeBoardScroll??0},'');
 }
 function remember(replace=false) {
   saveScroll();const url=new URL(location.href);
@@ -36,10 +37,13 @@ function remember(replace=false) {
   if(url.href!==location.href) history[replace?'replaceState':'pushState']({...history.state,vibeScroll:scrollY},'',url);
 }
 function restoreScroll(y,unchangedY) {
+  const boardX=history.state?.vibeBoardScroll||0;
   restoring=true;
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     // A visitor may already have scrolled while the catalog or font loaded.
-    if(unchangedY===undefined||scrollY===unchangedY)scrollTo(0,y||0);
+    if(unchangedY===undefined||scrollY===unchangedY){
+      scrollTo(0,y||0);const board=results.querySelector('.category-board');if(board)board.scrollLeft=boardX;
+    }
     restoring=false;saveScroll();
   }));
 }
@@ -65,18 +69,28 @@ function chooseOption(index) {
   if(category!=='all'&&category!==app.category)category=app.category;
   applyCategory();closeSuggestions();remember();render(true);
   results.scrollIntoView({block:'start',behavior:reducedMotion.matches?'instant':'smooth'});
+  const board=results.querySelector('.category-board'),column=board?.querySelector(`[data-column="${app.category}"]`);
+  if(column)board.scrollTo({left:column.offsetLeft,behavior:reducedMotion.matches?'instant':'smooth'});
 }
-function card(app) {
+function card(app,heading='h2') {
   let links=[];
   try { links=relatedLinks(app.links); } catch { /* Invalid legacy links are never rendered. */ }
-  return `<article class="app-item"><a class="app-card" href="${escape(app.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escape(app.name)} — 새 탭에서 열기"><div class="card-image">${thumbnail(app)}</div><div class="card-body"><span class="category-label ${escape(app.category)}"><i></i>${categories[app.category]}</span><div class="card-title-row"><h2>${escape(app.name)}</h2><span class="card-arrow" aria-hidden="true">↗</span></div><p class="card-description">${escape(app.description || '웹앱을 열어 확인하세요.')}</p></div></a><div class="card-footer"><span class="primary-label">${escape(app.primary_label || '프로그램')}</span><div class="related-links">${links.map(link=>`<a class="related-link" href="${escape(link.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escape(app.name)} ${escape(link.label)} — 새 탭에서 열기">${escape(link.label)} ↗</a>`).join('')}</div></div></article>`;
+  return `<article class="app-item"><a class="app-card" href="${escape(app.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escape(app.name)} — 새 탭에서 열기"><div class="card-image">${thumbnail(app)}</div><div class="card-body"><span class="category-label ${escape(app.category)}"><i></i>${categories[app.category]}</span><div class="card-title-row"><${heading}>${escape(app.name)}</${heading}><span class="card-arrow" aria-hidden="true">↗</span></div><p class="card-description">${escape(app.description || '웹앱을 열어 확인하세요.')}</p></div></a><div class="card-footer"><span class="primary-label">${escape(app.primary_label || '프로그램')}</span><div class="related-links">${links.map(link=>`<a class="related-link" href="${escape(link.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escape(app.name)} ${escape(link.label)} — 새 탭에서 열기">${escape(link.label)} ↗</a>`).join('')}</div></div></article>`;
+}
+function skeletonCard(){return '<div class="skeleton-card"><div class="skeleton-image skeleton"></div><div class="skeleton-body"><span class="skeleton skeleton-tag"></span><span class="skeleton skeleton-title"></span><span class="skeleton skeleton-line"></span><span class="skeleton skeleton-line short"></span></div></div>';}
+function categoryBoard(filtered,loading=false){
+  return `<p class="board-scroll-hint"${loading?' aria-hidden="true"':''}>옆으로 넘겨 다른 분류를 확인하세요 <span aria-hidden="true">↔</span></p><div class="category-board${loading?' skeleton-grid':''}" ${loading?'aria-hidden="true"':'role="region" aria-label="분류별 웹앱 목록" tabindex="0"'}>${boardOrder.map(key=>{
+    const members=filtered.filter(app=>app.category===key);
+    return `<section class="board-column" data-column="${key}" aria-labelledby="board-title-${key}"><header class="board-heading"><h2 id="board-title-${key}">${categories[key]}</h2><span class="board-count">${loading?'—':members.length}</span></header><div class="board-stack">${loading?skeletonCard():members.length?members.map(app=>card(app,'h3')).join(''):`<p class="board-empty">${search.value.trim()?'일치하는 웹앱이 없습니다.':'등록된 웹앱이 없습니다.'}</p>`}</div></section>`;
+  }).join('')}</div>`;
 }
 function render(animate = false) {
+  const boardX=results.querySelector('.category-board')?.scrollLeft??history.state?.vibeBoardScroll??0;
   transition?.cancel();results.setAttribute('aria-busy',String(loadState==='loading'));
   if(loadState!=='ready'){
     closeSuggestions();
     document.querySelector('#result-status').textContent=loadState==='loading'?'웹앱을 불러오는 중입니다.':'목록 연결을 확인해 주세요.';
-    results.innerHTML=loadState==='loading'?`<h2 class="sr-only">웹앱을 불러오는 중입니다.</h2><div class="app-grid skeleton-grid" aria-hidden="true">${Array.from({length:3},()=>'<div class="skeleton-card"><div class="skeleton-image skeleton"></div><div class="skeleton-body"><span class="skeleton skeleton-tag"></span><span class="skeleton skeleton-title"></span><span class="skeleton skeleton-line"></span><span class="skeleton skeleton-line short"></span></div></div>').join('')}</div>`:'<div class="empty-state"><h2>목록을 불러오지 못했습니다.</h2><p>연결을 확인한 뒤 다시 시도해 주세요.</p><button class="button" id="retry">다시 시도</button></div>';
+    results.innerHTML=loadState==='loading'?`<h2 class="sr-only">웹앱을 불러오는 중입니다.</h2>${category==='all'?categoryBoard([],true):`<div class="app-grid skeleton-grid" aria-hidden="true">${Array.from({length:3},skeletonCard).join('')}</div>`}`:'<div class="empty-state"><h2>목록을 불러오지 못했습니다.</h2><p>연결을 확인한 뒤 다시 시도해 주세요.</p><button class="button" id="retry">다시 시도</button></div>';
     document.querySelector('#retry')?.addEventListener('click',load);updateIndicator();return;
   }
   const query=search.value.trim();
@@ -87,8 +101,10 @@ function render(animate = false) {
     results.innerHTML = `<div class="empty-state"><div class="empty-icon" aria-hidden="true">${apps.length ? '⌕' : '▦'}</div><h2>${apps.length ? '검색 결과가 없습니다.' : '아직 등록된 웹앱이 없습니다.'}</h2><p>${apps.length ? '다른 검색어나 분류로 찾아보세요.' : '웹앱이 등록되면 이곳에서 확인할 수 있습니다.'}</p>${apps.length ? '<button class="text-button" id="reset-filters">전체 보기 ↗</button>' : ''}</div>`;
     document.querySelector('#reset-filters')?.addEventListener('click',()=>{search.value='';selectedId='';category='all';typing=false;applyCategory();closeSuggestions();remember();render(true);});
   } else {
-    results.innerHTML = `<div class="app-grid" data-layout="${filtered.length===1?'single':filtered.length===2?'two':'many'}">${filtered.map(card).join('')}</div>`;
+    results.innerHTML = category==='all'?categoryBoard(filtered):`<div class="app-grid" data-layout="${filtered.length===1?'single':filtered.length===2?'two':'many'}">${filtered.map(app=>card(app)).join('')}</div>`;
     bindImageErrors(results);
+    const board=results.querySelector('.category-board');
+    if(board){board.scrollLeft=boardX;board.addEventListener('scroll',saveScroll,{passive:true});}
   }
   updateIndicator();
   if (animate && !reducedMotion.matches) transition = results.animate([{ opacity:.25, transform:'translateY(8px)' },{ opacity:1, transform:'translateY(0)' }],{ duration:220, easing:'cubic-bezier(.2,.7,.2,1)' });

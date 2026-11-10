@@ -31,6 +31,7 @@ test('GitHub Pages /vibe/ 경로에서 화면·목록·필터·관리자 안내�
     assert.match(await page.locator('.tab[data-category=other]').textContent(),/기타/);
     assert.match(await page.locator('link[rel=stylesheet]').getAttribute('href'), /^\.\/public\//);
     await page.locator('.admin-link').click();
+    await page.waitForURL(url+'manage.html');
     assert.equal(page.url(),url+'manage.html');
     await page.getByText('GitHub 로그인 초기 연결이 필요합니다.').waitFor();
     assert.equal(await page.locator('[name=password]').count(),0);assert.equal(await page.locator('[name=token]').count(),1);
@@ -48,7 +49,8 @@ test('GitHub Pages /vibe/ 경로에서 화면·목록·필터·관리자 안내�
     await page.reload();
     await page.locator('.app-card').first().waitFor();
     assert.equal(await page.locator('.app-card').count(),2);
-    assert.equal(await page.locator('.app-card').first().getAttribute('href'),'https://example.org/');
+    assert.equal(await page.locator('.app-card').first().getAttribute('href'),'https://example.com/');
+    assert.equal(await page.locator('[data-column=work] .app-card').getAttribute('href'),'https://example.org/');
     await page.locator('[data-category=class]').click();
     assert.equal(await page.locator('.app-card').count(),1);
     assert.equal(await page.locator('.app-card').getAttribute('href'),'https://example.com/');
